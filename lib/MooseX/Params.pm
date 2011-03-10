@@ -12,21 +12,24 @@ use Tie::IxHash;
 use Data::Dumper::Concise;
 use Perl6::Caller;
 use Devel::Caller;
+use Class::MOP::Class;
+use Moose::Util::TypeConstraints qw(find_type_constraint);
+use Package::Stash;
+use Sub::Prototype qw(set_prototype);
 
 Moose::Exporter->setup_import_methods(
 	with_meta => [qw(method param params)],
-	#as_is     => [qw(params)],
 	also      => 'Moose',
 );
 
 sub init_meta 
 {
-	shift;
+	shift; # ignore caller name
 	my %args = @_;
 	Moose->init_meta(%args);
 	Moose::Util::MetaRole::apply_metaroles(
 		for => $args{for_class},
-		class_metaroles => { class => ['MooseXParamMetaClass'] },
+		class_metaroles => { class => ['MooseX::Params::Meta::Class'] },
 	);	
 }
 
@@ -72,7 +75,7 @@ sub method
 			}
 			else
 			{
-				Carp::croak("Execute must be a coderef");
+				Carp::croak("Option 'execute' must be a coderef, not $reftype");
 			}
 		}
 		else
@@ -85,8 +88,19 @@ sub method
 		Carp::croak("Cannot create method $name: invalid arguments");
 	}
 
-	my $method = MooseXParamMetaMethod->wrap(
-		$coderef,
+    my $wrapped_coderef = sub 
+    {
+        local our %_ = _process_parameters(@_);
+        $coderef->(@_);
+    };
+
+    if ( my $prototype = delete $options{prototype} )
+    {
+        set_prototype($wrapped_coderef, $prototype);
+    }
+
+	my $method = MooseX::Params::Meta::Method->wrap(
+		$wrapped_coderef,
 		name         => $name,
 		package_name => $meta->{package},
 	);
@@ -121,17 +135,85 @@ sub params
 	my $meta = shift;
 	my @parameters = @_;
 
-	my $frame = 2;
+  	my $frame = 3;
+	my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+    
+    my $package_with_percent_underscore = 'MooseX::Params';
 
-	my $method_name = caller($frame)->subroutine;
-	$method_name =~ s/^.+::(\w+)$/$1/;
+    my $stash = Package::Stash->new($package_with_percent_underscore);
+    my %args = %{ $stash->get_symbol('%_') };
+
+    # optionally dereference last requested parameter
+    my $last_param = pop @parameters;
+    my ($last_param_object) = $meta->get_method($method_name)->get_parameters_by_name($last_param);
+    my @last_value = my $last_value = $args{$last_param};
+
+    my $auto_deref;
+
+    if ($last_param_object->auto_deref)
+    {
+        if ( ref $last_value eq 'HASH' )
+        {
+            @last_value = %$last_value;
+            $auto_deref++;
+        }
+        elsif ( ref $last_value eq 'ARRAY' )
+        {
+            @last_value = @$last_value;
+            $auto_deref++;
+        }
+    }
+
+    my @all_values = ( @args{@parameters}, @last_value );
+
+    if (@parameters == 0 and !$auto_deref)
+    {
+        return $last_value;
+    }
+    else
+    {
+        return @all_values;
+    }
+}
+
+sub _process_parameters
+{
+    my @parameters = @_;
+
+   	my $frame = 1;
+	my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
 	
+    my $meta = Class::MOP::Class->initialize($package_name);
 	my $method = $meta->get_method($method_name);
-	my @parameter_objects = $method->get_parameters_by_name(@parameters);
-	my $offset = $method->index_offset;
-	my @indexes = map { $_->index + $offset } @parameter_objects;
 
-	return (Devel::Caller::caller_args($frame))[@indexes];
+	my @parameter_objects = $method->get_parameters if $method->has_parameters;;
+    
+    my %return_values;
+
+    foreach my $param (@parameter_objects)
+    {
+        my $value = $parameters[$param->index + $method->index_offset];
+        if ( $param->required and not defined $value )
+        {
+            Carp::croak "Parameter " . $param->name . " is required";
+        }
+
+        if ( $param->constraint )
+        {
+            my $constraint = find_type_constraint($param->constraint)
+                or Carp::croak("Could not find definition of type '" . $param->constraint . "'");
+
+            if ($param->coerce and $constraint->has_coercion)
+            {
+                $value = $constraint->assert_coerce($value);
+            }
+
+            $constraint->assert_valid($value);
+        }
+
+        $return_values{$param->name} = $value;
+    }
+    return %return_values;
 }
 
 sub _inflate_parameters
@@ -147,8 +229,9 @@ sub _inflate_parameters
 		my $parameter;
 		
 		if (ref $next)
+        # next value is a parameter specifiction
 		{
-			$parameter = MooseXParamMetaParameter->new(
+			$parameter = MooseX::Params::Meta::Parameter->new(
 				type  => 'positional',
 				index => $position,
 				name  => $current,
@@ -158,10 +241,10 @@ sub _inflate_parameters
 		}
 		else
 		{
-			$parameter = MooseXParamMetaParameter->new(
+			$parameter = MooseX::Params::Meta::Parameter->new(
 				type  => 'positional',
-				index => $position,
-				name  => $current
+                index => $position,
+                name  => $current
 			);
 		}
 		
@@ -171,5 +254,7 @@ sub _inflate_parameters
 
 	return @inflated_parameters;
 }
+
+
 
 1;

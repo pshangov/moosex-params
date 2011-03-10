@@ -11,7 +11,7 @@ param 'some_param' =>
 
 method 'try_me' => sub 
 {
-	#print "This is it!\n";
+	print "This is a plain sub!\n";
 };
 
 method 'basic_options' =>
@@ -30,6 +30,26 @@ method 'try_execute' =>
 	execute => sub { print "I work!!\n" },
 );
 
-no MooseXParam;
+method 'link' =>
+(
+	params =>
+	[
+		oldfile => { required => 1, isa => 'Str' },
+		newfile => { required => 1, isa => 'Str' },
+	],
+	execute => sub
+	{
+		print "Old file: " . params('oldfile') . "\n";
+		print "New file: " . params('newfile') . "\n";
+	}
+);
+
+method 'mysay' =>
+(
+    params  => [ lines => { auto_deref => 1 } ],
+    execute => sub { print "$_\n" for params('lines') },
+);
+
+no MooseX::Params;
 
 1;

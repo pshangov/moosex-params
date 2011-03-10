@@ -1,0 +1,582 @@
+My Perl 5.16+ Parameter Processing Apocalypse
+=============================================
+
+Change is happening and excitement is in the air. Perl 5.16 is gearing up to be a very inetersting release. And the one area where discussion is most heated is the last bastion of anti-modern Perl: method declarations and signatures.
+
+It is said that writing an OO system is the rite of passage of every Perl programmer. Well, the advent of Moose has unfortunately sucked the life from this otherwise noble pastime. So, if a programmer wants to reinvent the wheel, the second best option remains writing a parameter processing library. There has been some increased recent activity on CPAN recently - Sub::Spec, Smart::Args, Sub::Args, Attribute::Args, Params::Check, to name a few - a testimony to how disempowering Perl's core functionality feels to programmers, and how difficult it is to choose the one true library to use. So, to make matters worse, I too have decided to present to the general public my take on parameter validation. 
+
+First, most of the examples below are just prototyping and do not really work yet. The main purpose of this post is to plan the API first and hopefully get some feedback. The github repo is at http://github.com/pshangov/moosex-params, but the code is of pre-alpha quality and is unlikely to see the light of CPAN soon. Currently supported are positional parameters, validation, dereferencing, localized %_ and prototypes. Most of the cool things are yet to come ...
+
+Primary goals
+-------------
+
+In the light of the discussions about the future of method declaration and parameter validation and instantiation for Perl 5.16+ it is my concern that no parameter processing library currently existing for Perl 5 goes far enough in tackling the problem, and this may affect the decisions taken for core Perl at this stage. Listed blow are the set of feature I believe such a library should have, with examples in the form of a sample implementation called MooseX::Params. The main features of this library are:
+
+  1. Meta protocol for methods and parameters: this is where I find libraries such as Params::Validate and Params::Util inadquate, and MooseX::Method::Signatures lacking. A full meta protocol for parameters opens the door for many nifty features, not the least multi methods and extended role validation.
+  2. Extensibility: The method declaration and parameter procesing syntax for Perl 6, partially implemented by MooseX::Method::Signatures, is widely considered as the way to go. I myself find this syntax pretty, but also very restrictive and difficult to extend. The analogy is the same as with Perl 6 attributes and Moose attributes: Perl 6 has a succint syntax which is powerful, but it is based on puncutation to express meaning, and therefore adding new features is likely to entail adding new punctuation. Moose attributes are way more verbose to declare, but it is exceptionally simple to extend them with new properties via traits or metaclasses, and even add new kewords that encapsulate more complex behaviors. Denying this flexibility to method and parameter declaration would be a huge step backward for modern Perl 5 programming. 
+  3. Compatible with other implementations: with a common underlying protocol it would be easy to choose a parameter processing library of your liking, and still play well with others. MooseX::Method::Signatures could easily be extended to support a large subset of what MooseX::Params aims to provide, so that you can use that if you want Devel:Declare goodness that is compatible with Perl 5.8, MooseX::Params if you prefer less magic in the libraries that you use, and whatever cool syntax is introduced in new Perls if you are allowed to use them in production.
+
+So far with the theory, on to the code.
+
+The Basics
+----------
+
+MooseX::Params can be used just as ordinary Moose classes. Here is some code to start with:
+
+    package Competition;
+    
+    use MooseX::Params;
+
+    has 'sport' => ( is => 'ro', isa => 'Str', default => 'Running');
+    
+    sub compete { ... }
+
+    sub pretty_print_ranking {
+        my $self = shift;
+        my ($first, $second, $third) = @_;
+        
+        say "Ranking for " . $self->sport . ":";
+        say "***";
+        say "First place: $first";
+        say "Second place: $second";
+        say "Third place: $third";
+    };
+
+Executing
+
+    $competition->pretty_print_ranking(qw(George Peter Jim));
+ 
+prints:
+
+    Ranking for Running:
+    ***
+    First place: George
+    Second place: Peter
+    Third place: Jim
+
+MooseX::Params exports a 'method' keyword for method declaration, so the above 'pretty_print_ranking' can also be written as follows:
+
+    method 'pretty_print_ranking' => sub {
+        my $self = shift;
+        my ($first, $second, $third) = @_;
+
+        say "Ranking for " . $self->sport . ":";
+        say "***";
+        say "First place: $first";
+        say "Second place: $second";
+        say "Third place: $third";
+    };
+
+A trailing subref in the method declaration is really a shortcut for the following:
+
+    method 'pretty_print_ranking' => (
+        execute => sub {
+            my $self = shift;
+            ...
+        }
+    );
+
+The argument to the 'execute' option can also be a string that points to a sub which will be used as the method body:
+
+    method 'pretty_print_ranking' => (
+        execute => '_execute_pretty_print_ranking',
+    );
+
+    sub _execute_pretty_print_ranking {
+        my $self = shift;
+        ...
+    }
+
+In fact, if you do not provide a trailing subref or an 'execute' option, your method would default to "_execute_$method_name":
+
+    method 'pretty_print_ranking';
+
+    sub _execute_pretty_print_ranking {
+        my $self = shift;
+        ...
+    }
+
+Parameters
+----------
+
+You can declare parameters via the 'params' option, and later access them within the method body via the 'params' keyword:
+
+    method 'pretty_print_ranking' => (
+        params => [qw(first second third)],
+        sub {
+            my $self = shift;
+
+            say "Ranking for " . $self->sport . ":";
+            say "***";
+            say "First place: "  . params 'first';
+            say "Second place: " . params 'second';
+            say "Third place: "  . params 'third';            
+        }
+    );
+
+All declared parameters have names, even if they are positional (the default). You can fetch either a simple parameter or a group of parameters at once:
+
+    method 'pretty_print_ranking' => (
+        params => [qw(first second third)],
+        sub {
+            my $self = shift;
+            my ($first, $second, $third) = params qw(first second third);
+
+            say "Ranking for " . $self->sport . ":";
+            say "***";
+            say "First place: $first";
+            say "Second place: $second";
+            say "Third place: $third";       
+        }
+    );
+
+MooseX::Params also declares two package globals in your class: $self and %_. Within every method invocation, $self is localized to the invocant, and %_ is localized to a hash with the parameter as names, and parameter values as values:
+
+(NOTE: this is kind of experimental since I am not sure of all of its possible implications yet)
+
+    method 'pretty_print_ranking' => (
+        params => [qw(first second third)],
+        sub {
+            say "Ranking for " . $self->sport . ":";
+            say "***";
+            say "First place: $_{first}";
+            say "Second place: $_{second}";
+            say "Third place: $_{third}";            
+        }
+    );
+
+Parameter options
+-----------------
+
+The concept of parameters is heavily influenced by Moose attributes. Method parameters act as a complement to object attributes and allow you to build even more powerful APIs with greater separation of concerns:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            first  => { isa => 'Str', required => 1 },
+            second => { isa => 'Str', required => 1 },
+            third  => { isa => 'Str', required => 1 },
+        ],
+        sub {
+            say "Ranking for " . $self->sport . ":";
+            say "***";
+            say "First place: $_{first}";
+            say "Second place: $_{second}";
+            say "Third place: $_{third}";            
+        }
+    );
+
+Supported options borrowed from Moose attributes:
+
+  * isa
+  * required
+  * coerce
+  * init_arg (applies to named parameters only)
+  * auto_deref
+  * default
+  * builder
+  * lazy
+  * lazy_build
+  * traits
+  * weak_ref
+
+Some of them are more interesting than the others, so we will focus on them here.
+
+Auto dereferencing
+------------------
+
+You ham specify that a parameter should be automatically dereferenced when requested from 'params'. Let us modify the interface to 'pretty_print_ranking' a little:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport => { 
+                isa      => 'Str', 
+                required => 1, 
+                default  => 'Running' 
+            },
+            winners => { 
+                isa        => 'ArrayRef[Str]', 
+                required   => 1, 
+                auto_deref => 1 
+            },
+        ],
+        sub {
+            say "Ranking for " . params('sport') . ":";
+            say "***";
+            
+            my @places = qw(First Second Third);
+            my $i = 0;
+
+            foreach my $winner ( params('winners') )
+            {
+                say $places[$i] . " place: $winner";
+                last if ++$i >= 3;
+            }
+        }
+    );
+
+A parameter will auto dereference only if it is the only or last parameter requsted from 'params':
+
+    method 'pretty_print_ranking' => (
+        ...
+        sub { 
+            my ($sport, $first, $second, $last) = params qw(sport winners);
+            ...
+        }
+    };
+
+Builders
+--------
+
+Builders are a powerful feature that greatly aids in separation of concerns:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport  => { ... },
+            winners => { 
+                ...
+                lazy_build => 1,
+            },
+        ],
+        sub { ... }
+    );
+
+The builder method has access to both the method invocant and to the arguments hash with the parameters processed so far:
+
+    sub _build_param_winners
+    {
+        return [ $self->compete($_{sport}) ];
+    }
+
+Traits
+------
+
+Traits are the main point of extensibility for methods and parameters. Imagine a method that is a subcommand in a larger command line application (think App::Cmd), and you want to separate command-line argumens applicable to the whole app from command-line arguments applicable only to a specific subcommand:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport => { 
+                traits   => [qw(Getopt)],
+                cmd_flag => 'sport',
+                ...
+            },
+            winners => { ... },
+        ],
+        sub { ... }
+    );
+
+    shell:~# competition pretty_print_ranking --sport Running
+
+Named vs. positional
+--------------------
+
+Parameters are by default positional. If you want your arguments passed as a hash, you should explicitly request that:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            first  => { isa => 'Str', required => 1, type => 'named' },
+            second => { isa => 'Str', required => 1, type => 'named' },
+            third  => { isa => 'Str', required => 1, type => 'named' },
+        ],
+        sub {
+            ...          
+        }
+    );
+
+Now you can call your method like that:
+
+    $competition->pretty_print_ranking(
+        first  => 'George',
+        second => 'Peter',
+        third  => 'Jim',
+    );
+
+Since large applications tends to use a consistent style of parameter passing, you can change the defaults on a per-class basis:
+
+    use MooseX::Params -named;
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport  => { isa => 'Str', required => 1, type => 'positional' },
+            first  => { isa => 'Str', required => 1 },
+            second => { isa => 'Str', required => 1 },
+            third  => { isa => 'Str', required => 1 },
+        ],
+        sub {
+            ...          
+        }
+    );
+
+    $competition->pretty_print_ranking( 'Jumping',
+        first  => 'George',
+        second => 'Peter',
+        third  => 'Jim',
+    );
+
+As seen above, named arguments can mix with positional arguments, as long as all positinal arguments are required and come first. Other calling styles are available too, with the goal being to support most styles currently in use:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport  => { isa => 'Str', required => 1 },
+            first  => { isa => 'Str', required => 1, type => 'named_ref' },
+            second => { isa => 'Str', required => 1, type => 'named_ref' },
+            third  => { isa => 'Str', required => 1, type => 'named_ref' },
+        ],
+        sub {
+            ...          
+        }
+    );
+
+    $competition->pretty_print_ranking( 'Jumping', {
+        first  => 'George',
+        second => 'Peter',
+        third  => 'Jim',
+    });
+
+Predeclared parameters
+----------------------
+
+A large library will often use a limited number of common parameter types. E.g. most widget creation methods in a GUI library such as Tk would accept similar parameters such as 'background', 'foregroud', 'position', 'padding', 'lable', etc. MooseX::Params allows you to predeclare parameters and reuse them across methods:
+
+    param 'first' => (
+        isa      => 'Str',
+        required => 1,
+    );
+
+    param 'second' => (
+        isa      => 'Str',
+        required => 1,
+    );
+
+    param 'third' => (
+        isa      => 'Str',
+        required => 1,
+    );
+
+    method 'pretty_print_ranking' => (
+        params => [qw(first second third)],
+        sub { ... },
+    }
+
+You can modify pre-declared parameters when needed:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            '+first'  => { type => 'named'},
+            '+second' => { type => 'named'},
+            '+third'  => { type => 'named'},
+        ],
+        sub { ... },
+    }
+
+Slurpy parameters
+-----------------
+
+Slurpy parameters come last and consume the remained of the parameter list:
+
+    method 'pretty_print_ranking' => (
+        params => [
+            sport => { 
+                isa      => 'Str', 
+                required => 1, 
+                default  => 'Running' 
+            },
+            winners => { 
+                isa        => 'Array[Str]', 
+                required   => 1, 
+                auto_deref => 1,
+                slurpy     => 1,
+            },
+        ],
+        sub { ... }
+    );
+
+    $competition->pretty_print_ranking(qw(Jumping George Peter Jim));
+
+Return values
+-------------
+
+Methods can be declared with other attributes besides 'param'. The most important probably is the specifiction of the return value:
+
+    method 'pretty_print_ranking' => (
+        params  => [ ... ],
+        returns => 'Str',
+        sub { 
+            my $printout = "Ranking for " . $self->sport . ":\n";
+            $printout .= "***\n";
+            $printout .= "First place: $_{first}";
+            $printout .= "Second place: $_{second}";
+            $printout .= "Third place: $_{third}";
+
+            return $printout;
+        },
+    );
+
+The constraints for slurpy parameters can also be used to validate non-scalar return values. The compete mehtod returns a list of the winners of the first three places:
+
+    method 'compete' => (
+        returns => 'Array[Str]',
+        ...
+    );
+
+We can also validate return output according to context. Imagine that in scalar context our 'compete' method only returns the winner of the first place:
+
+    method 'compete' => (
+        returns => { scalar => 'Str', list => 'Array[Str]' },
+        ...
+    );
+
+Prototypes
+----------
+
+You can also specify prototypes (although if you want to do that you will probably want to use a lower level syntax for subroutine declaration):
+
+    method 'pretty_print_ranking' => (
+        prototype => '@',
+        ...
+    );
+
+Traits
+------
+
+Methods can have traits too:
+
+    method '_pretty_print_ranking' => (
+        traits  => [qw(Private Static Memoized)],
+        returns => 'Str',
+        ...
+    );
+
+    method 'pretty_print_ranking' => (
+        traits   => [qw(Subcommand)],
+        cmd_flag => 'results',
+        params => [
+            sport => { 
+                traits   => [qw(Getopt)],
+                cmd_flag => 'sport',
+                ...
+            },
+            ...
+        ],
+        sub { print __PACKAGE__->_pretty_print_ranking }
+    );
+
+    shell:~# competition results --sport Running
+
+Extended role requirements
+--------------------------
+
+Since methods know about their parameters and return values, roles can be more picky about what they accept:
+
+    package RankingPrettyPrinter;
+
+    use Moose::Role;
+    use MooseX::Params;
+
+    requires 'sport'   => { returns => 'Str' };
+    requires 'compete' => { returns => 'Array[Str]' };
+
+    method 'pretty_print_ranking' => (
+        params => [ winners => { lazy_buld => 1, ...} ],
+        sub { ... },
+    );
+
+    sub _build_param_winners {
+        return [ $self->compete($self->sport) ];
+    }
+
+Mutlimethods
+------------
+
+We can do multimethods too. Here is the classic rock, paper, scissors game:
+
+    package RockPaperScissors;
+
+    use MooseX::Params;
+
+    param 'rock'     => ( isa => subtype( 'Str' => where { $_ eq 'Rock'     } ) );
+    param 'paper'    => ( isa => subtype( 'Str' => where { $_ eq 'Paper'    } ) );
+    param 'scissors' => ( isa => subtype( 'Str' => where { $_ eq 'Scissors' } ) );
+
+    multi method 'play' => ( params => [qw(paper rock)],     sub { 1 } );
+    multi method 'play' => ( params => [qw(scissors paper)], sub { 1 } );
+    multi method 'play' => ( params => [qw(rock scissors)],  sub { 1 } );
+    multi method 'play' => ( sub { 0 } );
+
+Modules
+-------
+
+And last but not least, most of these features are also available to plain functions: 
+
+    package RankingPrettyPrinter;
+
+    use MoooseX::Params::Module;
+
+    function 'pretty_print_ranking' => (
+        export_ok   => 1,
+        export_tags => [qw(:all :print)],
+        params      => [qw(sport winners)],
+        execute     => sub { ... }
+    );
+
+How this all relates to Perl 5.16
+---------------------------------
+
+So far so good, but how does all this relate to the future development of Perl 5? Well, the above examples may be powerful, but with brackets and arrows galore they sure ain't beautiful. However, I don't think Perl 5.16+ necessarily needs to add a bunch of new keywords and fix them in core for generations to come in order to improve the situation. Here is a beautified example of some of the above code: 
+
+    package Competition 0.001 isa Moose::Class;
+
+    method pretty_print_ranking
+        param sport   { isa => 'Str',        qo(:required) }
+        param winners { isa => 'Array[Str]', qo(:required :auto_deref :slurpy) }
+        returns 'Str'
+    {
+        my $printout = "Ranking for $_{sport} :\n";
+        ...
+        return $printout;         
+    }
+
+So let us tranport ourselves an year in the future and look at some hypothetical features in the very-soon-to-be-released Perl 5.16 that would make this syntax possible:
+
+First, the sugary package declaration:
+
+    package XXX isa YYY;
+
+This is esentially equivalent to:
+    
+    package XXX:
+    use YYY;
+
+except that it makes it explicitly clear what type of package we are dealing with ('isa' is probably not the most appropriate keyword here but it illustrates the example well). Example uses:
+
+    package XXX isa Moose::Class;
+    package XXX isa Moose::Role;
+    package XXX isa Catalyst::Controller;
+    package XXX isa App::Cmd;
+    package XXX isa Regexp::Grammar;
+
+Next, some new subroutine prototypes. In the (purely fictitious!) examples below:
+
+  * "$" is a prototype for a bareword identifier that does not need to be followed by a comma
+  * \% is a prototype for a hashref
+  * @[\%] is a prototype for an array of hashrefs
+  * , is an expression-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert commas after the function invocation
+  * ; is a statement-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert a semi-column after the function invocation
+  * & is ye old code prototype
+
+    sub param    ("$"\%,)
+    sub returns  ($,) 
+    sub method   ("$"@[\%]&;)
+
+There is the 'quote options' operator:
+
+    qo(:required :auto_deref :slurpy) == ( required => 1, auto_deref => 1, slurpy => 1 );
+
+And a library that allows insertion of lexical variables without the overkill of messing with Devel::Declare or real pluggable keywords (I have no idea if this is possible at all ...):
+
+    use Package::Stash::Lexical;
+    my $coderef = sub { ... };
+    my $stash = my $stash = Package::Stash::Lexical->new($coderef);
+    $stash->add_symbol('$self' => ... );
+    $stash->add_symbol('%_'    => ... );
+
+Imagine the wave of creativity that such changes would encourage. 
