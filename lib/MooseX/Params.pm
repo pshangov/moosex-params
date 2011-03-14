@@ -17,10 +17,18 @@ use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Package::Stash;
 use Sub::Prototype qw(set_prototype);
 
-Moose::Exporter->setup_import_methods(
+my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params)],
 	also      => 'Moose',
+    install   => [qw(import unimport init_meta)]
+    
 );
+
+#sub import 
+#{
+#    my $class = shift;
+#    $class->$import;
+#}
 
 sub init_meta 
 {
@@ -30,7 +38,7 @@ sub init_meta
 	Moose::Util::MetaRole::apply_metaroles(
 		for => $args{for_class},
 		class_metaroles => { class => ['MooseX::Params::Meta::Class'] },
-	);	
+	);
 }
 
 sub method
