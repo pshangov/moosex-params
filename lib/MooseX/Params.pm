@@ -17,9 +17,10 @@ use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Package::Stash;
 use Sub::Prototype qw(set_prototype);
 use B::Hooks::EndOfScope qw(on_scope_end);
+use Hook::AfterRuntime qw(after_runtime);
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
-	with_meta => [qw(method param params)],
+	with_meta => [qw(method param params execute)],
 	also      => 'Moose',
     install   => [qw(unimport)]
     
@@ -27,24 +28,37 @@ my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 
 sub _finalize
 {
-    warn "Finalizing";
-    return;
-
     my $class = shift;
     my $metaclass = $class->meta;
     
-    foreach my $method ($metaclass->get_all_methods)
+    my @methods = grep { $_->can('_delayed') and $_->_delayed } $metaclass->get_all_methods;
+
+    foreach my $method (@methods)
     {
-        warn $method->name;
+        my $execute = $method->_execute;
+ 	    my $coderef = $metaclass->get_method($execute);
+    	Carp::croak("Cannot create method: 'execute' points to a non-existant sub '$execute'") unless $coderef;
+        
+        my $name = $method->name;
+        my $package_name = $method->package_name;
+
+        my $old_method = $metaclass->remove_method($name);
+
+        my $new_method = MooseX::Params::Meta::Method->wrap(
+            $coderef,
+        	name         => $name,
+            package_name => $package_name,
+        );
+
+        $metaclass->add_method($name, $new_method);
     }
 }
 
 sub import {
-    warn "Importing";
     my $frame = 1;
     my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
 
-    on_scope_end { _finalize($package_name) };
+    after_runtime { _finalize($package_name) };
     goto &$import;
 }
 
@@ -59,17 +73,33 @@ sub init_meta
 	);
 }
 
+sub execute
+{
+    my ($meta, $name, $coderef) = @_;
+
+    my $old_method = $meta->remove_method($name);
+
+    my $new_method = MooseX::Params::Meta::Method->wrap(
+        $coderef,
+        name         => $name,
+        package_name => $old_method->package_name,
+        _delayed     => 0,
+    );
+
+    $meta->add_method($name, $new_method);
+}
+
 sub method
 {
 	my ( $meta, $name, @options ) = @_;
 
-    warn "Compiling method $name";
-	
 	my ($coderef, %options);
 
 	if (!@options)
 	{
-		Carp::croak("Cannot create method without specifications");
+        $options{execute} = "_execute_$name";
+        $options{_delayed} = 1;
+        #Carp::croak("Cannot create method without specifications");
 	}
 	elsif (@options == 1 and ref $options[0] eq 'CODE')
 	{
@@ -94,8 +124,7 @@ sub method
 			my $reftype = ref $options{execute};
 			if (!$reftype)
 			{
-				$coderef = $meta->get_method($options{execute});
-				Carp::croak("Cannot create method: 'execute' points to a non-existant sub '$options{execute}'");
+                $options{_delayed} = 1;
 			}
 			elsif ($reftype eq 'CODE')
 			{
@@ -108,7 +137,9 @@ sub method
 		}
 		else
 		{
-			Carp::croak("Cannot create method without code to execute");
+            $options{execute} = "_execute_$name";
+            $options{_delayed} = 1;
+            #Carp::croak("Cannot create method without code to execute");
 		}
 	}
 	else
@@ -127,11 +158,26 @@ sub method
         set_prototype($wrapped_coderef, $prototype);
     }
 
-	my $method = MooseX::Params::Meta::Method->wrap(
-		$wrapped_coderef,
-		name         => $name,
-		package_name => $meta->{package},
-	);
+    my $method;
+
+    if ($options{_delayed})
+    {
+	    $method = MooseX::Params::Meta::Method->wrap(
+		    sub {},
+            _execute     => $options{execute},
+            _delayed     => 1,
+    		name         => $name,
+	    	package_name => $meta->{package},
+	    );
+    }
+    else
+    {
+    	$method = MooseX::Params::Meta::Method->wrap(
+		    $wrapped_coderef,
+    		name         => $name,
+	    	package_name => $meta->{package},
+	    );
+    }
 
 	if (%options)
 	{

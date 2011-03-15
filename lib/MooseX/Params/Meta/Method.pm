@@ -27,6 +27,19 @@ has 'index_offset' =>
 	default => 1,
 );
 
+has '_delayed' =>
+(
+    is       => 'ro',
+    isa      => 'Bool',
+    default  => 0,
+);
+
+has '_execute' =>
+(
+    is  => 'ro',
+    isa => 'Str',
+);
+
 sub get_parameters_by_name
 {
 	my ($self, @names) = @_;
