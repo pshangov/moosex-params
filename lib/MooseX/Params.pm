@@ -16,19 +16,37 @@ use Class::MOP::Class;
 use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Package::Stash;
 use Sub::Prototype qw(set_prototype);
+use B::Hooks::EndOfScope qw(on_scope_end);
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params)],
 	also      => 'Moose',
-    install   => [qw(import unimport init_meta)]
+    install   => [qw(unimport)]
     
 );
 
-#sub import 
-#{
-#    my $class = shift;
-#    $class->$import;
-#}
+sub _finalize
+{
+    warn "Finalizing";
+    return;
+
+    my $class = shift;
+    my $metaclass = $class->meta;
+    
+    foreach my $method ($metaclass->get_all_methods)
+    {
+        warn $method->name;
+    }
+}
+
+sub import {
+    warn "Importing";
+    my $frame = 1;
+    my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+
+    on_scope_end { _finalize($package_name) };
+    goto &$import;
+}
 
 sub init_meta 
 {
@@ -44,6 +62,8 @@ sub init_meta
 sub method
 {
 	my ( $meta, $name, @options ) = @_;
+
+    warn "Compiling method $name";
 	
 	my ($coderef, %options);
 
@@ -129,7 +149,10 @@ sub method
 			}
 		}
 	}
-	$meta->add_method($name, $method);
+    
+    $meta->add_method($name, $method) unless defined wantarray;
+
+    return $method;
 }
 
 sub param

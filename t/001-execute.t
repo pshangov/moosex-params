@@ -7,6 +7,8 @@ use Test::Most;
     package TestExecute;
 
     use MooseX::Params;
+
+    warn "Proceeding to method creation";
     
     method 'test_only'     => sub { 'OK' };
     method 'test_trailing' => ( params  => ['any'], sub { 'OK' } );
