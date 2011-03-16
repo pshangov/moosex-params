@@ -30,6 +30,11 @@ has 'constraint' =>
     init_arg => 'isa',
 );
 
+has 'default' => 
+(
+    is => 'ro',
+);
+
 has 'does' =>
 (
 	is  => 'rw',

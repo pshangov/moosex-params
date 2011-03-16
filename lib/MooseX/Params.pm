@@ -18,12 +18,12 @@ use Package::Stash;
 use Sub::Prototype qw(set_prototype);
 use B::Hooks::EndOfScope qw(on_scope_end);
 use Hook::AfterRuntime qw(after_runtime);
+use Scalar::Util qw(isweak weaken);
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params execute)],
 	also      => 'Moose',
     install   => [qw(unimport)]
-    
 );
 
 sub _finalize
@@ -35,17 +35,18 @@ sub _finalize
 
     foreach my $method (@methods)
     {
+        my $name = $method->name;
+        my $package_name = $method->package_name;
         my $execute = $method->_execute;
  	    my $coderef = $metaclass->get_method($execute);
     	Carp::croak("Cannot create method: 'execute' points to a non-existant sub '$execute'") unless $coderef;
+        my $wrapped_coderef = _wrap_method($package_name, $coderef);
         
-        my $name = $method->name;
-        my $package_name = $method->package_name;
 
         my $old_method = $metaclass->remove_method($name);
 
         my $new_method = MooseX::Params::Meta::Method->wrap(
-            $coderef,
+            $wrapped_coderef,
         	name         => $name,
             package_name => $package_name,
         );
@@ -57,6 +58,10 @@ sub _finalize
 sub import {
     my $frame = 1;
     my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+
+    my $stash = Package::Stash->new($package_name);
+    $stash->add_symbol('%_');
+    $stash->add_symbol('$self', "George");
 
     after_runtime { _finalize($package_name) };
     goto &$import;
@@ -78,11 +83,13 @@ sub execute
     my ($meta, $name, $coderef) = @_;
 
     my $old_method = $meta->remove_method($name);
+    my $package_name = $old_method->package_name;
+    my $wrapped_coderef = _wrap_method($package_name, $coderef);
 
     my $new_method = MooseX::Params::Meta::Method->wrap(
-        $coderef,
+        $wrapped_coderef,
         name         => $name,
-        package_name => $old_method->package_name,
+        package_name => $package_name,
         _delayed     => 0,
     );
 
@@ -147,16 +154,9 @@ sub method
 		Carp::croak("Cannot create method $name: invalid arguments");
 	}
 
-    my $wrapped_coderef = sub 
-    {
-        local our %_ = _process_parameters(@_);
-        $coderef->(@_);
-    };
-
-    if ( my $prototype = delete $options{prototype} )
-    {
-        set_prototype($wrapped_coderef, $prototype);
-    }
+    my $prototype = delete $options{prototype};
+    my $package_name = $meta->{package};
+    my $wrapped_coderef = _wrap_method($package_name, $coderef, $prototype);
 
     my $method;
 
@@ -199,6 +199,24 @@ sub method
     $meta->add_method($name, $method) unless defined wantarray;
 
     return $method;
+}
+
+sub _wrap_method
+{
+    my ($package_name, $coderef, $prototype) = @_;
+
+    my $wrapped_coderef = sub 
+    {
+        no strict 'refs';
+        local %_ = _process_parameters(@_);
+        local *{$package_name.'::self'} = \$_[0];
+        use strict 'refs';
+        $coderef->(@_);
+    };
+
+    set_prototype($wrapped_coderef, $prototype) if $prototype;
+    
+    return $wrapped_coderef;
 }
 
 sub param
@@ -270,16 +288,35 @@ sub _process_parameters
     foreach my $param (@parameter_objects)
     {
         my $value = $parameters[$param->index + $method->index_offset];
+
+        # default
+        if (!defined $value and defined $param->default)
+        {
+            my $default = $param->default;
+
+            if( ref($default) eq 'CODE' )
+            {   
+                $value = $default->();
+            }
+            else
+            {
+                $value = $default;
+            }
+        }
+
+        # required
         if ( $param->required and not defined $value )
         {
             Carp::croak "Parameter " . $param->name . " is required";
         }
-
+        
+        # isa
         if ( $param->constraint )
         {
             my $constraint = find_type_constraint($param->constraint)
                 or Carp::croak("Could not find definition of type '" . $param->constraint . "'");
-
+            
+            # coerce
             if ($param->coerce and $constraint->has_coercion)
             {
                 $value = $constraint->assert_coerce($value);
@@ -289,6 +326,12 @@ sub _process_parameters
         }
 
         $return_values{$param->name} = $value;
+
+        # weak_ref
+        if ($param->weak_ref and !isweak($value))
+        {
+            weaken($return_values{$param->name});
+        }
     }
     return %return_values;
 }
