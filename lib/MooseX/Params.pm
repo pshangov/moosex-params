@@ -2,7 +2,7 @@ package MooseX::Params;
 
 use strict;
 use warnings;
-
+use 5.10.0;
 use Moose;
 use Moose::Exporter;
 use Moose::Util::MetaRole;
@@ -19,6 +19,46 @@ use Sub::Prototype qw(set_prototype);
 use B::Hooks::EndOfScope qw(on_scope_end);
 use Hook::AfterRuntime qw(after_runtime);
 use Scalar::Util qw(isweak weaken);
+use Variable::Magic qw();
+use List::Util qw(first);
+use Try::Tiny qw(try catch);
+
+my $wizard = Variable::Magic::wizard (
+    data  => sub 
+    { 
+        my ($ref, %data) = @_;
+        return \%data;
+    },
+    fetch => sub 
+    {
+        my ( $ref, $data, $key ) = @_; 
+        
+        my @keys = @{ $data->{keys} };
+        my @processed = @{ $data->{processed} };
+
+        return unless ($key ~~ @keys);
+        return if ($key ~~ @processed);
+
+        my $param = first { $_->name eq $key } @{ $data->{parameters} };
+        return unless $param;
+
+        my $builder = $param->builder;
+
+        my $value = try {
+            $builder->($data->{self}, %$ref);
+        } catch {
+            Carp::croak("Error executing builder for parameter $key: $_");        
+        };
+        
+        $ref->{$key} = $value;
+        push @processed, $key;
+        $data->{processed} = \@processed;
+    },
+    store => sub 
+    { 
+        my ( $ref, $data, $key ) = @_; 
+    },
+);
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params execute)],
@@ -40,7 +80,7 @@ sub _finalize
         my $execute = $method->_execute;
  	    my $coderef = $metaclass->get_method($execute);
     	Carp::croak("Cannot create method: 'execute' points to a non-existant sub '$execute'") unless $coderef;
-        my $wrapped_coderef = _wrap_method($package_name, $coderef);
+        my $wrapped_coderef = _wrap_method($package_name, $coderef, $method->parameters);
         
 
         my $old_method = $metaclass->remove_method($name);
@@ -84,7 +124,7 @@ sub execute
 
     my $old_method = $meta->remove_method($name);
     my $package_name = $old_method->package_name;
-    my $wrapped_coderef = _wrap_method($package_name, $coderef);
+    my $wrapped_coderef = _wrap_method($package_name, $coderef, $old_method->parameters);
 
     my $new_method = MooseX::Params::Meta::Method->wrap(
         $wrapped_coderef,
@@ -156,7 +196,7 @@ sub method
 
     my $prototype = delete $options{prototype};
     my $package_name = $meta->{package};
-    my $wrapped_coderef = _wrap_method($package_name, $coderef, $prototype);
+    my $wrapped_coderef = _wrap_method($package_name, $coderef, undef, $prototype);
 
     my $method;
 
@@ -203,12 +243,19 @@ sub method
 
 sub _wrap_method
 {
-    my ($package_name, $coderef, $prototype) = @_;
+    my ($package_name, $coderef, $parameters, $prototype) = @_;
 
     my $wrapped_coderef = sub 
     {
         no strict 'refs';
         local %_ = _process_parameters(@_);
+        Variable::Magic::cast(%_, $wizard, 
+            package_name => $package_name,
+            parameters   => $parameters,
+            keys         => [ map {$_->name} @$parameters ],
+            processed    => [ keys %_ ],
+            self         => \$_[0],
+        );
         local *{$package_name.'::self'} = \$_[0];
         use strict 'refs';
         $coderef->(@_);
