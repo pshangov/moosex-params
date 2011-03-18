@@ -79,8 +79,20 @@ has 'auto_deref' =>
 
 has 'lazy_build' =>
 (
+	is      => 'rw',
+	isa     => 'Bool',
+    trigger => sub 
+    {
+        my $self = shift;
+        $self->lazy(1);
+        $self->builder('_build_param_' . $self->name);
+    }
+);
+
+has 'builder' =>
+(
 	is  => 'rw',
-	isa => 'Bool',
+	isa => 'Str',
 );
 
 has 'documentation' =>

@@ -10,21 +10,22 @@ use Test::Most;
 
     method 'test' => 
     (
-        params => [ 'first' => { isa => 'Int'} ],
+        params => [ 
+            'first' => 
+            { 
+                isa        => 'Int',
+                lazy_build => 1,
+            } 
+        ],
         sub { $_{first} }
     ); 
 
-    method 'another' => 
-    (
-        params => [ 'one' => { isa => 'Int'} ],
-        sub { $_{one} }
-    ); 
+    sub _build_param_first { 42 }
 
     no MooseX::Params;
 }
 
 my $object = TestExecute->new;
-ok( $object->test(42) );
-ok( $object->another(42) );
+is( $object->test(42), 42 );
 
 done_testing();

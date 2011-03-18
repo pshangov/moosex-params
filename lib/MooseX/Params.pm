@@ -22,6 +22,7 @@ use Scalar::Util qw(isweak weaken);
 use Variable::Magic qw();
 use List::Util qw(first);
 use Try::Tiny qw(try catch);
+use MooseX::Params::Util::Parameter;
 
 my $wizard = Variable::Magic::wizard (
     data  => sub 
@@ -40,9 +41,10 @@ my $wizard = Variable::Magic::wizard (
         return if ($key ~~ @processed);
 
         my $param = first { $_->name eq $key } @{ $data->{parameters} };
-        return unless $param;
+        return unless $param and $param->lazy;
 
-        my $builder = $param->builder;
+        my $builder = $data->{stash}->get_symbol('&' . $param->builder);
+        Carp::croak("Cannot find builder for parameter $key") unless $builder;        
 
         my $value = try {
             $builder->($data->{self}, %$ref);
@@ -57,6 +59,7 @@ my $wizard = Variable::Magic::wizard (
     store => sub 
     { 
         my ( $ref, $data, $key ) = @_; 
+        $data->{processed} = \( @{ $data->{processed} }, $key );
     },
 );
 
@@ -245,12 +248,14 @@ sub _wrap_method
 {
     my ($package_name, $coderef, $parameters, $prototype) = @_;
 
+    my $stash = Package::Stash->new($package_name);
+
     my $wrapped_coderef = sub 
     {
         no strict 'refs';
-        local %_ = _process_parameters(@_);
+        local %_ = _process_parameters($stash, @_);
         Variable::Magic::cast(%_, $wizard, 
-            package_name => $package_name,
+            stash        => $stash,
             parameters   => $parameters,
             keys         => [ map {$_->name} @$parameters ],
             processed    => [ keys %_ ],
@@ -320,7 +325,9 @@ sub params
 
 sub _process_parameters
 {
+    my $stash = shift;
     my @parameters = @_;
+    my $last_index = $#parameters;
 
    	my $frame = 1;
 	my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
@@ -334,51 +341,30 @@ sub _process_parameters
 
     foreach my $param (@parameter_objects)
     {
-        my $value = $parameters[$param->index + $method->index_offset];
-
-        # default
-        if (!defined $value and defined $param->default)
-        {
-            my $default = $param->default;
-
-            if( ref($default) eq 'CODE' )
-            {   
-                $value = $default->();
-            }
-            else
-            {
-                $value = $default;
-            }
-        }
-
-        # required
-        if ( $param->required and not defined $value )
-        {
-            Carp::croak "Parameter " . $param->name . " is required";
-        }
+        my $index = $param->index + $method->index_offset;
+        my $value;
         
-        # isa
-        if ( $param->constraint )
+        if ( $index > $last_index and $param->required )
         {
-            my $constraint = find_type_constraint($param->constraint)
-                or Carp::croak("Could not find definition of type '" . $param->constraint . "'");
-            
-            # coerce
-            if ($param->coerce and $constraint->has_coercion)
-            {
-                $value = $constraint->assert_coerce($value);
-            }
-
-            $constraint->assert_valid($value);
+            MooseX::Params::Util::Parameter::check_required($param);
+            $value = MooseX::Params::Util::Parameter::build($param, $stash);
         }
+        else
+        {
+            $value = $parameters[$index];
+        }
+
+        $value = MooseX::Params::Util::Parameter::validate($param, $value);
+
 
         $return_values{$param->name} = $value;
 
-        # weak_ref
         if ($param->weak_ref and !isweak($value))
         {
-            weaken($return_values{$param->name});
+            #weaken($value);
+            #weaken($return_values{$param->name});
         }
+        
     }
     return %return_values;
 }
