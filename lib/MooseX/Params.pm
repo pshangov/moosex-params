@@ -20,7 +20,7 @@ use B::Hooks::EndOfScope qw(on_scope_end);
 use Hook::AfterRuntime qw(after_runtime);
 use Scalar::Util qw(isweak weaken);
 use Variable::Magic qw();
-use List::Util qw(first);
+use List::Util qw(first max);
 use Try::Tiny qw(try catch);
 use MooseX::Params::Util::Parameter;
 
@@ -329,34 +329,59 @@ sub _process_parameters
     my $meta = Class::MOP::Class->initialize($package_name);
 	my $method = $meta->get_method($method_name);
 
-	my @parameter_objects = $method->get_parameters if $method->has_parameters;;
-    
+	my @parameter_objects = $method->get_parameters if $method->has_parameters;
+
+    return unless @parameter_objects;
+
+    my $offset = $method->index_offset;
+
+    my $last_positional_index = max 
+        map  { $_->index + $offset } 
+        grep { $_->type eq 'positional' } 
+        @parameter_objects;
+       
+    $last_positional_index++;
+
+    my %named = @parameters[ $last_positional_index .. $last_index ];
+
     my %return_values;
 
     foreach my $param (@parameter_objects)
-    {
-        my $index = $param->index + $method->index_offset;
+    {   
+        my ( $is_set, $original_value );
+
+        if ( $param->type eq 'positional' )
+        {
+            my $index = $param->index + $offset;
+            $is_set = $index > $last_index ? 0 : 1;
+            $original_value = $parameters[$index] if $is_set;
+        }
+        else
+        {
+            $is_set = exists $named{$param->name};
+            $original_value = $named{$param->name} if $is_set;
+        }
+        
         my $is_required = $param->required;
         my $has_default = defined $param->default;
 
         my $value;
         
-        if ( $index > $last_index and $is_required )
+        if ( !$is_set and $is_required )
         {
             MooseX::Params::Util::Parameter::check_required($param);
             $value = MooseX::Params::Util::Parameter::build($param, $stash);
         }
-        elsif ($index > $last_index and !$is_required and $has_default)
+        elsif ( !$is_set and !$is_required and $has_default )
         {
             $value = MooseX::Params::Util::Parameter::build($param, $stash, 1); 
         }
         else
         {
-            $value = $parameters[$index];
+            $value = $original_value;
         }
 
         $value = MooseX::Params::Util::Parameter::validate($param, $value);
-
 
         $return_values{$param->name} = $value;
 
@@ -365,8 +390,8 @@ sub _process_parameters
             #weaken($value);
             #weaken($return_values{$param->name});
         }
-        
     }
+   
     return %return_values;
 }
 
