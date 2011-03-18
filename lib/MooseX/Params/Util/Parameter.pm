@@ -21,7 +21,7 @@ sub check_required
 
 sub build
 {
-    my ($param, $stash) = @_;
+    my ($param, $stash, $default_only) = @_;
 
     my $value;
 
@@ -30,7 +30,8 @@ sub build
     if (defined $default and ref($default) ne 'CODE')
     {
         $value = $default;
-    } else 
+    } 
+    else 
     {
         my $coderef;
 
@@ -40,6 +41,7 @@ sub build
         }
         else
         {
+            return if $default_only;
             my $coderef = $stash->get_symbol('&' . $param->builder);
             Carp::croak("Cannot find builder " . $param->builder) unless $coderef;        
         }
@@ -52,6 +54,29 @@ sub build
     }
 
     return $value;
+}
+
+sub _wrap_builder
+{
+    my ($package_name, $coderef, $data, $ref, $self, $wizard) = @_;
+
+    my $stash = Package::Stash->new($package_name);
+
+    return sub 
+    {
+        no strict 'refs';
+        local %_ = %$ref;
+        Variable::Magic::cast(%_, $wizard, 
+            stash        => $stash,
+            parameters   => $data->{parameters},
+            keys         => [ map {$_->name} @{$data->{parameters}} ],
+            processed    => [ keys %_ ],
+            self         => $self,
+        );
+        local *{$package_name.'::self'} = $self;
+        use strict 'refs';
+        my @return = $coderef->(@_);
+    };
 }
 
 sub validate

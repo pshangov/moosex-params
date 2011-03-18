@@ -43,15 +43,9 @@ my $wizard = Variable::Magic::wizard (
         my $param = first { $_->name eq $key } @{ $data->{parameters} };
         return unless $param and $param->lazy;
 
-        my $builder = $data->{stash}->get_symbol('&' . $param->builder);
-        Carp::croak("Cannot find builder for parameter $key") unless $builder;        
+        my $value = MooseX::Params::Util::Parameter::build($param, $data->{stash});
+        $value = MooseX::Params::Util::Parameter::build($param, $value);
 
-        my $value = try {
-            $builder->($data->{self}, %$ref);
-        } catch {
-            Carp::croak("Error executing builder for parameter $key: $_");        
-        };
-        
         $ref->{$key} = $value;
         push @processed, $key;
         $data->{processed} = \@processed;
@@ -342,12 +336,19 @@ sub _process_parameters
     foreach my $param (@parameter_objects)
     {
         my $index = $param->index + $method->index_offset;
+        my $is_required = $param->required;
+        my $has_default = defined $param->default;
+
         my $value;
         
-        if ( $index > $last_index and $param->required )
+        if ( $index > $last_index and $is_required )
         {
             MooseX::Params::Util::Parameter::check_required($param);
             $value = MooseX::Params::Util::Parameter::build($param, $stash);
+        }
+        elsif ($index > $last_index and !$is_required and $has_default)
+        {
+            $value = MooseX::Params::Util::Parameter::build($param, $stash, 1); 
         }
         else
         {

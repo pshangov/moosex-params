@@ -34,7 +34,7 @@ use Scalar::Util qw(isweak);
         [
             first  => { isa => 'ArrayRefOfInt', coerce   => 1 },
             second => { isa => 'ArrayRefOfInt', weak_ref => 1 },
-            third  => { isa => 'ArrayRefOfInt', default  => sub { [42] }, required => 1 },
+            third  => { isa => 'ArrayRefOfInt', default  => sub { [42] } },
         ],
         sub { @_{qw(first second third)} }
     );
