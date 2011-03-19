@@ -4,6 +4,7 @@ use 5.010;
 use strict;
 use warnings;
 use MooseX::Params::Util::Parameter;
+use List::Util qw(first);
 use parent 'MooseX::Params::Util::Wizard';
 
 sub data

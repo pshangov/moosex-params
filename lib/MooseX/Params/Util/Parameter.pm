@@ -58,13 +58,14 @@ sub build
 
 sub _wrap_builder
 {
-    my ($package_name, $coderef, $data, $ref, $self, $wizard) = @_;
+    my ($param, $package_name, $coderef, $data, $ref, $self, $wizard) = @_;
 
     my $stash = Package::Stash->new($package_name);
 
     return sub 
     {
         no strict 'refs';
+        local *{$package_name.'::self'} = $self;
         local %_ = %$ref;
         Variable::Magic::cast(%_, $wizard, 
             stash        => $stash,
@@ -72,10 +73,12 @@ sub _wrap_builder
             keys         => [ map {$_->name} @{$data->{parameters}} ],
             processed    => [ keys %_ ],
             self         => $self,
+            builder      => $data->{builder},
         );
-        local *{$package_name.'::self'} = $self;
         use strict 'refs';
-        my @return = $coderef->(@_);
+        my $value = $coderef->($self, %$ref);
+        $_{$param->name} = $value;
+        return %_;
     };
 }
 
