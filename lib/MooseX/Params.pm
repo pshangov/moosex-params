@@ -23,39 +23,9 @@ use Variable::Magic qw();
 use List::Util qw(first max);
 use Try::Tiny qw(try catch);
 use MooseX::Params::Util::Parameter;
+use MooseX::Params::Util::Magic;
 
-my $wizard = Variable::Magic::wizard (
-    data  => sub 
-    { 
-        my ($ref, %data) = @_;
-        return \%data;
-    },
-    fetch => sub 
-    {
-        my ( $ref, $data, $key ) = @_; 
-        
-        my @keys = @{ $data->{keys} };
-        my @processed = @{ $data->{processed} };
-
-        return unless ($key ~~ @keys);
-        return if ($key ~~ @processed);
-
-        my $param = first { $_->name eq $key } @{ $data->{parameters} };
-        return unless $param and $param->lazy;
-
-        my $value = MooseX::Params::Util::Parameter::build($param, $data->{stash});
-        $value = MooseX::Params::Util::Parameter::build($param, $value);
-
-        $ref->{$key} = $value;
-        push @processed, $key;
-        $data->{processed} = \@processed;
-    },
-    store => sub 
-    { 
-        my ( $ref, $data, $key ) = @_; 
-        $data->{processed} = \( @{ $data->{processed} }, $key );
-    },
-);
+my $wizard = MooseX::Params::Util::Magic->new;
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params execute)],
