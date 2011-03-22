@@ -235,6 +235,51 @@ sub _wrap_method
     return $wrapped_coderef;
 }
 
+sub wrap
+{
+    my ($coderef, $stash, $paramerers, $key, $prototype) = @_;
+    my $wizard = MooseX::Params::Util::Magic->new;
+	my $package_name = $stash->name;
+    
+    my $wrapped = sub 
+    {
+		# localize $self
+        my $self = $_[0];
+		no strict 'refs';
+        local *{$package_name.'::self'} = \$self;
+        use strict 'refs';
+        
+		# localize and enchant %_
+		local %_;
+        Variable::Magic::cast(%_, $wizard,
+            stash      => $stash,                         # is the stash needed?
+			parameters => $parameters,
+			allowed    => [ map {$_->name} @$parameters ],
+            lazy       => [ keys %_ ],  # TODO                  
+            self       => \$self,       # needed to pass as first argument to parameter builders
+			wrapper    => \&wrap,
+        );
+
+		# execute for a parameter builder
+        if ($key)
+		{
+			my $value = $coderef->($self, %_);
+            $value = MooseX::Params::Util::validate($parameters->{$key}, $value);
+			$_{$key} = $value;
+            return %_;
+        }
+		# execute for a method
+        else
+        {
+            return $coderef->(@_);
+        }
+    };
+
+    set_prototype($wrapped, $prototype) if $prototype;
+
+	return $wrapped;
+}
+
 sub param
 {
 	my ( $meta, $name, %options ) = @_;

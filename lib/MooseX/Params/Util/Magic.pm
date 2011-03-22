@@ -3,8 +3,9 @@ package MooseX::Params::Util::Magic;
 use 5.010;
 use strict;
 use warnings;
+use List::Util ();
+use Carp ();
 use MooseX::Params::Util::Parameter;
-use List::Util qw(first);
 use parent 'MooseX::Params::Util::Wizard';
 
 sub data
@@ -16,28 +17,40 @@ sub data
 sub fetch
 {
     my ( $ref, $data, $key ) = @_; 
-    
-    my @keys = @{ $data->{keys} };
-    my @processed = @{ $data->{processed} };
+ 	
+	# throw exception if $key is not a valid parameter name
+	Carp::croak("Attempt to access non-existany parameter $key") 
+		unless $key ~~ @{$data->{allowed}};
+	
+	# quit if this parameter has already been processed
+    return if exists $ref->{$key};
+	
+	#my $builder = $data->{stash}->get_symbol("&_build_param_$key");
+	my $builder = $data->{parameters}{$key}->{builder_sub};
+    my $wrapped = $data->{wrapper}->($builder, $data->{stash}, $key);
 
-    return unless ($key ~~ @keys);
-    return if ($key ~~ @processed);
+	# this check should not be necessary
+    if ($builder)
+    {
+        my %updated = $wrapped->($data->{self}, %$ref);
+        foreach my $updated_key ( keys %updated )
+        {
+            $ref->{$updated_key} = $updated{$updated_key} 
+                unless exists $ref->{$updated_key};
+        }
+    }
+    else
+    {
+        $ref->{$key} = undef;
+    }
 
-    my $param = first { $_->name eq $key } @{ $data->{parameters} };
-    return unless $param and $param->lazy;
-
-    my $value = MooseX::Params::Util::Parameter::build($param, $data->{stash});
-    $value = MooseX::Params::Util::Parameter::build($param, $value);
-
-    $ref->{$key} = $value;
-    push @processed, $key;
-    $data->{processed} = \@processed;
+	# my $value = MooseX::Params::Util::Parameter::build($param, $data->{stash});
+    # $value = MooseX::Params::Util::Parameter::build($param, $value);
 }
 
 sub store
 {
-    my ( $ref, $data, $key ) = @_; 
-    $data->{processed} = \( @{ $data->{processed} }, $key );
+	Carp::croak "Don't touch me!" if caller ne __PACKAGE__;
 }
 
 1;
