@@ -1,4 +1,4 @@
-package MooseX::Params::Util::Wizard;
+package MooseX::Params::Magic::Base;
 
 use strict;
 use warnings;
