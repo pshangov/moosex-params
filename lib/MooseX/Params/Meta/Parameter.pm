@@ -1,6 +1,7 @@
 package MooseX::Params::Meta::Parameter;
 
 use Moose;
+use Package::Stash;
 
 has 'name' =>
 (
@@ -90,6 +91,39 @@ has 'lazy_build' =>
 );
 
 has 'builder' =>
+(
+	is  => 'rw',
+	isa => 'Str',
+);
+
+has 'builder_sub' =>
+(
+	is      => 'rw',
+	isa     => 'CodeRef',
+	lazy    => 1,
+	default => sub 
+	{
+		my $self = shift;
+
+		my $default = $self->default;
+		my $builder = $self->builder;
+		if ($default and ref $default eq 'CODE')
+		{
+			return $default;
+		}
+		elsif ($builder)
+		{
+			my $stash = Package::Stash->new($self->package);
+			return $stash->get_symbol($builder);
+		}
+		else
+		{
+			return;
+		}
+	},
+);
+
+has 'package' =>
 (
 	is  => 'rw',
 	isa => 'Str',

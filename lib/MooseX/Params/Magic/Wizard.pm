@@ -7,6 +7,7 @@ use Carp ();
 use MooseX::Params::Util::Parameter;
 use MooseX::Params::Magic::Data;
 use parent 'MooseX::Params::Magic::Base';
+use Devel::Dwarn;
 
 sub data
 { 
@@ -19,8 +20,9 @@ sub fetch
     my ( $ref, $data, $key ) = @_; 
  	
 	# throw exception if $key is not a valid parameter name
+	my @allowed = $data->allowed_parameters;
 	Carp::croak("Attempt to access non-existany parameter $key") 
-		unless $key ~~ $data->allowed_parameters;
+		unless $key ~~ @allowed;
 	
 	# quit if this parameter has already been processed
     return if exists $ref->{$key};

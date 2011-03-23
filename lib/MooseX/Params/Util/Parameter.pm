@@ -5,6 +5,11 @@ use warnings;
 
 use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Try::Tiny qw(try catch);
+use List::Util qw(max);
+use Scalar::Util qw(isweak);
+use Class::MOP::Class;
+use Package::Stash;
+use Perl6::Caller;
 
 sub check_required
 {
@@ -71,7 +76,7 @@ sub wrap
         use strict 'refs';
         
 		# localize and enchant %_
-		local %_;
+		local %_ = process(@_);
         Variable::Magic::cast(%_, $wizard,
 			parameters => $parameters,
             self       => \$self,       # needed to pass as first argument to parameter builders
@@ -98,6 +103,85 @@ sub wrap
 
 	return $wrapped;
 }
+
+sub process
+{
+    my @parameters = @_;
+    my $last_index = $#parameters;
+
+   	my $frame = 1;
+	my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+    my $stash = Package::Stash->new($package_name);
+	
+    my $meta = Class::MOP::Class->initialize($package_name);
+	my $method = $meta->get_method($method_name);
+
+	my @parameter_objects = $method->all_parameters if $method->has_parameters;
+
+    return unless @parameter_objects;
+
+    my $offset = $method->index_offset;
+
+    my $last_positional_index = max 
+        map  { $_->index + $offset } 
+        grep { $_->type eq 'positional' } 
+        @parameter_objects;
+       
+    $last_positional_index++;
+
+    my %named = @parameters[ $last_positional_index .. $last_index ];
+
+    my %return_values;
+
+    foreach my $param (@parameter_objects)
+    {   
+        my ( $is_set, $original_value );
+
+        if ( $param->type eq 'positional' )
+        {
+            my $index = $param->index + $offset;
+            $is_set = $index > $last_index ? 0 : 1;
+            $original_value = $parameters[$index] if $is_set;
+        }
+        else
+        {
+            $is_set = exists $named{$param->name};
+            $original_value = $named{$param->name} if $is_set;
+        }
+        
+        my $is_required = $param->required;
+        my $has_default = defined $param->default;
+
+        my $value;
+        
+        if ( !$is_set and $is_required )
+        {
+            MooseX::Params::Util::Parameter::check_required($param);
+            $value = MooseX::Params::Util::Parameter::build($param, $stash);
+        }
+        elsif ( !$is_set and !$is_required and $has_default )
+        {
+            $value = MooseX::Params::Util::Parameter::build($param, $stash, 1); 
+        }
+        else
+        {
+            $value = $original_value;
+        }
+
+        $value = MooseX::Params::Util::Parameter::validate($param, $value);
+
+        $return_values{$param->name} = $value;
+
+        if ($param->weak_ref and !isweak($value))
+        {
+            #weaken($value);
+            #weaken($return_values{$param->name});
+        }
+    }
+   
+    return %return_values;
+}
+
 
 sub validate
 {

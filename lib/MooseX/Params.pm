@@ -10,6 +10,7 @@ use MooseX::Params::Meta::Method;
 use MooseX::Params::Meta::Parameter;
 use Tie::IxHash;
 use Data::Dumper::Concise;
+use Devel::Dwarn;
 use Perl6::Caller;
 use Devel::Caller;
 use Class::MOP::Class;
@@ -107,13 +108,13 @@ sub method
 {
 	my ( $meta, $name, @options ) = @_;
 
+	my $stash = Package::Stash->new($meta->{package});
 	my ($coderef, %options);
 
 	if (!@options)
 	{
-        $options{execute} = "_execute_$name";
-        $options{_delayed} = 1;
-        #Carp::croak("Cannot create method without specifications");
+		$options{execute} = "_execute_$name";
+		$coderef = $stash->get_symbol('&' . $options{execute});
 	}
 	elsif (@options == 1 and ref $options[0] eq 'CODE')
 	{
@@ -138,7 +139,7 @@ sub method
 			my $reftype = ref $options{execute};
 			if (!$reftype)
 			{
-                $options{_delayed} = 1;
+				$coderef = $stash->get_symbol('&' . $options{execute});
 			}
 			elsif ($reftype eq 'CODE')
 			{
@@ -152,8 +153,7 @@ sub method
 		else
 		{
             $options{execute} = "_execute_$name";
-            $options{_delayed} = 1;
-            #Carp::croak("Cannot create method without code to execute");
+			$coderef = $stash->get_symbol('&' . $options{execute});
 		}
 	}
 	else
@@ -168,7 +168,7 @@ sub method
 		{
 			if (ref $options{params} eq 'ARRAY')
 			{
-				%parameters = _inflate_parameters(@{$options{params}});
+				%parameters = _inflate_parameters($meta->{package}, @{$options{params}});
 			}
 			#elsif ($options{params} eq 'HASH') { }
 			else
@@ -181,30 +181,14 @@ sub method
     my $prototype = delete $options{prototype};
     my $package_name = $meta->{package};
 	# TODO execute later (after parameters are determined)
-	my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, \@parameters, $prototype);
+	my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, \%parameters, $prototype);
 
-    my $method;
-
-    if ($options{_delayed})
-    {
-	    $method = MooseX::Params::Meta::Method->wrap(
-		    sub {},
-            _execute     => $options{execute},
-            _delayed     => 1,
-    		name         => $name,
-	    	package_name => $meta->{package},
-	    	parameters   => \%parameters,
-	    );
-    }
-    else
-    {
-    	$method = MooseX::Params::Meta::Method->wrap(
-		    $wrapped_coderef,
-    		name         => $name,
-	    	package_name => $meta->{package},
-			parameters   => \%parameters,
-	    );
-    }
+	my $method = MooseX::Params::Meta::Method->wrap(
+		$wrapped_coderef,
+		name         => $name,
+		package_name => $meta->{package},
+		parameters   => \%parameters,
+	);
 
     $meta->add_method($name, $method) unless defined wantarray;
 
@@ -263,86 +247,9 @@ sub params
     }
 }
 
-sub _process_parameters
-{
-    my $stash = shift;
-    my @parameters = @_;
-    my $last_index = $#parameters;
-
-   	my $frame = 1;
-	my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
-	
-    my $meta = Class::MOP::Class->initialize($package_name);
-	my $method = $meta->get_method($method_name);
-
-	my @parameter_objects = $method->all_parameters if $method->has_parameters;
-
-    return unless @parameter_objects;
-
-    my $offset = $method->index_offset;
-
-    my $last_positional_index = max 
-        map  { $_->index + $offset } 
-        grep { $_->type eq 'positional' } 
-        @parameter_objects;
-       
-    $last_positional_index++;
-
-    my %named = @parameters[ $last_positional_index .. $last_index ];
-
-    my %return_values;
-
-    foreach my $param (@parameter_objects)
-    {   
-        my ( $is_set, $original_value );
-
-        if ( $param->type eq 'positional' )
-        {
-            my $index = $param->index + $offset;
-            $is_set = $index > $last_index ? 0 : 1;
-            $original_value = $parameters[$index] if $is_set;
-        }
-        else
-        {
-            $is_set = exists $named{$param->name};
-            $original_value = $named{$param->name} if $is_set;
-        }
-        
-        my $is_required = $param->required;
-        my $has_default = defined $param->default;
-
-        my $value;
-        
-        if ( !$is_set and $is_required )
-        {
-            MooseX::Params::Util::Parameter::check_required($param);
-            $value = MooseX::Params::Util::Parameter::build($param, $stash);
-        }
-        elsif ( !$is_set and !$is_required and $has_default )
-        {
-            $value = MooseX::Params::Util::Parameter::build($param, $stash, 1); 
-        }
-        else
-        {
-            $value = $original_value;
-        }
-
-        $value = MooseX::Params::Util::Parameter::validate($param, $value);
-
-        $return_values{$param->name} = $value;
-
-        if ($param->weak_ref and !isweak($value))
-        {
-            #weaken($value);
-            #weaken($return_values{$param->name});
-        }
-    }
-   
-    return %return_values;
-}
-
 sub _inflate_parameters
 {
+	my $package = shift;
 	my @params = @_;
 	my $position = 0;
 	my @inflated_parameters;
@@ -357,9 +264,10 @@ sub _inflate_parameters
         # next value is a parameter specifiction
 		{
 			$parameter = MooseX::Params::Meta::Parameter->new(
-				type  => 'positional',
-				index => $position,
-				name  => $current,
+				type    => 'positional',
+				index   => $position,
+				name    => $current,
+				package => $package,
 				%$next,
 			);
 			$i++;
@@ -367,9 +275,10 @@ sub _inflate_parameters
 		else
 		{
 			$parameter = MooseX::Params::Meta::Parameter->new(
-				type  => 'positional',
-                index => $position,
-                name  => $current
+				type    => 'positional',
+                index   => $position,
+                name    => $current,
+				package => $package,
 			);
 		}
 		
