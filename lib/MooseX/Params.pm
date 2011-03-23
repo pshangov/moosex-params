@@ -23,9 +23,9 @@ use Variable::Magic qw();
 use List::Util qw(first max);
 use Try::Tiny qw(try catch);
 use MooseX::Params::Util::Parameter;
-use MooseX::Params::Util::Magic;
+use MooseX::Params::Magic::Wizard;
 
-my $wizard = MooseX::Params::Util::Magic->new;
+my $wizard = MooseX::Params::Magic::Wizard->new;
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
 	with_meta => [qw(method param params execute)],
@@ -47,7 +47,7 @@ sub _finalize
         my $execute = $method->_execute;
  	    my $coderef = $metaclass->get_method($execute);
     	Carp::croak("Cannot create method: 'execute' points to a non-existant sub '$execute'") unless $coderef;
-        my $wrapped_coderef = _wrap_method($package_name, $coderef, $method->parameters);
+        my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, $method->parameters);
         
 
         my $old_method = $metaclass->remove_method($name);
@@ -91,7 +91,7 @@ sub execute
 
     my $old_method = $meta->remove_method($name);
     my $package_name = $old_method->package_name;
-    my $wrapped_coderef = _wrap_method($package_name, $coderef, $old_method->parameters);
+    my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, $old_method->parameters);
 
     my $new_method = MooseX::Params::Meta::Method->wrap(
         $wrapped_coderef,
@@ -162,7 +162,6 @@ sub method
 	}
 
 	my %parameters;
-
 	if (%options)
 	{
 		if ($options{params})
@@ -181,7 +180,8 @@ sub method
 
     my $prototype = delete $options{prototype};
     my $package_name = $meta->{package};
-    my $wrapped_coderef = _wrap_method($package_name, $coderef, undef, $prototype);
+	# TODO execute later (after parameters are determined)
+	my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, \@parameters, $prototype);
 
     my $method;
 
@@ -206,80 +206,9 @@ sub method
 	    );
     }
 
-    
     $meta->add_method($name, $method) unless defined wantarray;
 
     return $method;
-}
-
-sub _wrap_method
-{
-    my ($package_name, $coderef, $parameters, $prototype) = @_;
-
-    my $stash = Package::Stash->new($package_name);
-
-    my $wrapped_coderef = sub 
-    {
-        no strict 'refs';
-        local %_ = _process_parameters($stash, @_);
-        Variable::Magic::cast(%_, $wizard, 
-            stash        => $stash,
-            parameters   => $parameters,
-            self         => \$_[0],
-        );
-        local *{$package_name.'::self'} = \$_[0];
-        use strict 'refs';
-        $coderef->(@_);
-    };
-
-    set_prototype($wrapped_coderef, $prototype) if $prototype;
-    
-    return $wrapped_coderef;
-}
-
-sub wrap
-{
-    my ($coderef, $stash, $parameters, $key, $prototype) = @_;
-    my $wizard = MooseX::Params::Util::Magic->new;
-	my $package_name = $stash->name;
-    
-    my $wrapped = sub 
-    {
-		# localize $self
-        my $self = $_[0];
-		no strict 'refs';
-        local *{$package_name.'::self'} = \$self;
-        use strict 'refs';
-        
-		# localize and enchant %_
-		local %_;
-        Variable::Magic::cast(%_, $wizard,
-            stash      => $stash,                         # is the stash needed?
-			parameters => $parameters,
-			allowed    => [ map {$_->name} @$parameters ],
-            lazy       => [ keys %_ ],  # TODO                  
-            self       => \$self,       # needed to pass as first argument to parameter builders
-			wrapper    => \&wrap,
-        );
-
-		# execute for a parameter builder
-        if ($key)
-		{
-			my $value = $coderef->($self, %_);
-            $value = MooseX::Params::Util::validate($parameters->{$key}, $value);
-			$_{$key} = $value;
-            return %_;
-        }
-		# execute for a method
-        else
-        {
-            return $coderef->(@_);
-        }
-    };
-
-    set_prototype($wrapped, $prototype) if $prototype;
-
-	return $wrapped;
 }
 
 sub param
@@ -452,7 +381,5 @@ sub _inflate_parameters
 
 	return %inflated_parameters;
 }
-
-
 
 1;

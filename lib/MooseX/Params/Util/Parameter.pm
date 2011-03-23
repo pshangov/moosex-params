@@ -56,30 +56,47 @@ sub build
     return $value;
 }
 
-sub _wrap_builder
+sub wrap
 {
-    my ($param, $package_name, $coderef, $data, $ref, $self, $wizard) = @_;
+    my ($coderef, $package_name, $parameters, $key, $prototype) = @_;
 
-    my $stash = Package::Stash->new($package_name);
-
-    return sub 
+    my $wizard = MooseX::Params::Magic::Wizard->new;
+    
+    my $wrapped = sub 
     {
-        no strict 'refs';
-        local *{$package_name.'::self'} = $self;
-        local %_ = %$ref;
-        Variable::Magic::cast(%_, $wizard, 
-            stash        => $stash,
-            parameters   => $data->{parameters},
-            keys         => [ map {$_->name} @{$data->{parameters}} ],
-            processed    => [ keys %_ ],
-            self         => $self,
-            builder      => $data->{builder},
-        );
+		# localize $self
+        my $self = $_[0];
+		no strict 'refs';
+        local *{$package_name.'::self'} = \$self;
         use strict 'refs';
-        my $value = $coderef->($self, %$ref);
-        $_{$param->name} = $value;
-        return %_;
+        
+		# localize and enchant %_
+		local %_;
+        Variable::Magic::cast(%_, $wizard,
+			parameters => $parameters,
+            self       => \$self,       # needed to pass as first argument to parameter builders
+			wrapper    => \&wrap,
+			package    => $package_name,
+        );
+
+		# execute for a parameter builder
+        if ($key)
+		{
+			my $value = $coderef->($self, %_);
+            $value = MooseX::Params::Util::validate($parameters->{$key}, $value);
+			$_{$key} = $value;
+            return %_;
+        }
+		# execute for a method
+        else
+        {
+            return $coderef->(@_);
+        }
     };
+
+    set_prototype($wrapped, $prototype) if $prototype;
+
+	return $wrapped;
 }
 
 sub validate

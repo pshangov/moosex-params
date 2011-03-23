@@ -1,11 +1,11 @@
-My Perl 5.16+ Parameter Processing Apocalypse
+My Perl 5.16 Parameter Processing Apocalypse
 =============================================
 
 Change is happening and excitement is in the air. Perl 5.16 is gearing up to be a very inetersting release. And the one area where discussion is most heated is the last bastion of anti-modern Perl: method declarations and signatures.
 
 It is said that writing an OO system is the rite of passage of every Perl programmer. Well, the advent of Moose has unfortunately sucked the life from this otherwise noble pastime. So, if a programmer wants to reinvent the wheel, the second best option remains writing a parameter processing library. There has been some increased recent activity on CPAN recently - Sub::Spec, Smart::Args, Sub::Args, Attribute::Args, Params::Check, to name a few - a testimony to how disempowering Perl's core functionality feels to programmers, and how difficult it is to choose the one true library to use. So, to make matters worse, I too have decided to present to the general public my take on parameter validation. 
 
-First, most of the examples below are just prototyping and do not really work yet. The main purpose of this post is to plan the API first and hopefully get some feedback. The github repo is at http://github.com/pshangov/moosex-params, but the code is of pre-alpha quality and is unlikely to see the light of CPAN soon. Currently supported are positional parameters, validation, dereferencing, localized %_ and prototypes. Most of the cool things are yet to come ...
+First, most of the examples below are just prototyping and do not really work yet. The main purpose of this post is to plan the API first and hopefully get some feedback. The github repo is at [http://github.com/pshangov/moosex-params](http://github.com/pshangov/moosex-params), but the code is of pre-alpha quality and is unlikely to see the light of CPAN soon. Currently supported are positional parameters, validation, dereferencing, localized `%_` and prototypes. Most of the cool things are yet to come ...
 
 Primary goals
 -------------
@@ -130,7 +130,7 @@ All declared parameters have names, even if they are positional (the default). Y
         }
     );
 
-MooseX::Params also declares two package globals in your class: $self and %_. Within every method invocation, $self is localized to the invocant, and %_ is localized to a hash with the parameter as names, and parameter values as values:
+MooseX::Params also declares two package globals in your class: `$self` and `%_`. Within every method invocation, $self is localized to the invocant, and `%_` is localized to a hash with the parameter as names, and parameter values as values:
 
 (NOTE: this is kind of experimental since I am not sure of all of its possible implications yet)
 
@@ -554,29 +554,25 @@ except that it makes it explicitly clear what type of package we are dealing wit
     package XXX isa App::Cmd;
     package XXX isa Regexp::Grammar;
 
-Next, some new subroutine prototypes. In the (purely fictitious!) examples below:
+Next, some new subroutine prototypes. Most importantly, we need prorotypes that can also hint the parser where to end and expression or a statement. In the fictitious examples below:
 
-  * "$" is a prototype for a bareword identifier that does not need to be followed by a comma
-  * \% is a prototype for a hashref
-  * @[\%] is a prototype for an array of hashrefs
-  * , is an expression-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert commas after the function invocation
-  * ; is a statement-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert a semi-column after the function invocation
-  * & is ye old code prototype
+  * `"$"` is a prototype for a bareword identifier that does not need to be followed by a comma
+  * `\%` is a prototype for a hashref
+  * `@[\%]` is a prototype for an array of hashrefs
+  * `,` is an expression-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert commas after the function invocation
+  * `;` is a statement-ending prototype (works if the last argument to the sub can always be reliably determined) so that we do not have to insert a semi-column after the function invocation
+  * `&` is ye old code prototype
 
-    sub param    ("$"\%,)
-    sub returns  ($,) 
-    sub method   ("$"@[\%]&;)
+With them we can declare:
 
-There is the 'quote options' operator:
+    sub param    ("$"\%,)     # bareword, hashref and expression end
+    sub returns  ($,)         # scalar and expression end
+    sub method   ("$"@[\%]&;) # bareword, array of hashrefs ('param' and 'returns' will return hashref-based objects), code and statement end
+
+And last but not least there is the 'quote options' operator:
 
     qo(:required :auto_deref :slurpy) == ( required => 1, auto_deref => 1, slurpy => 1 );
 
-And a library that allows insertion of lexical variables without the overkill of messing with Devel::Declare or real pluggable keywords (I have no idea if this is possible at all ...):
+Of course I know little about how Perl's parser works and I don't know how possible it is to add such features to the core. I like to think, however, that Perl still has a lot of room to evolve by building on established idions rather than introducing radical new concepts.
 
-    use Package::Stash::Lexical;
-    my $coderef = sub { ... };
-    my $stash = my $stash = Package::Stash::Lexical->new($coderef);
-    $stash->add_symbol('$self' => ... );
-    $stash->add_symbol('%_'    => ... );
-
-Imagine the wave of creativity that such changes would encourage. 
+Thank you for bearing with my little langage design exercise, please comment if you find it interesting!
