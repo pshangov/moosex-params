@@ -161,6 +161,24 @@ sub method
 		Carp::croak("Cannot create method $name: invalid arguments");
 	}
 
+	my %parameters;
+
+	if (%options)
+	{
+		if ($options{params})
+		{
+			if (ref $options{params} eq 'ARRAY')
+			{
+				%parameters = _inflate_parameters(@{$options{params}});
+			}
+			#elsif ($options{params} eq 'HASH') { }
+			else
+			{
+				Carp::croak("Argument to 'params' must be either an arrayref or a hashref");
+			}
+		}
+	}
+
     my $prototype = delete $options{prototype};
     my $package_name = $meta->{package};
     my $wrapped_coderef = _wrap_method($package_name, $coderef, undef, $prototype);
@@ -175,6 +193,7 @@ sub method
             _delayed     => 1,
     		name         => $name,
 	    	package_name => $meta->{package},
+	    	parameters   => \%parameters,
 	    );
     }
     else
@@ -183,25 +202,10 @@ sub method
 		    $wrapped_coderef,
     		name         => $name,
 	    	package_name => $meta->{package},
+			parameters   => \%parameters,
 	    );
     }
 
-	if (%options)
-	{
-		if ($options{params})
-		{
-			if (ref $options{params} eq 'ARRAY')
-			{
-				my @parameters = _inflate_parameters(@{$options{params}});
-				$method->parameters(\@parameters);
-			}
-			#elsif ($options{params} eq 'HASH') { }
-			else
-			{
-				Carp::croak("Argument to 'params' must be either an arrayref or a hashref");
-			}
-		}
-	}
     
     $meta->add_method($name, $method) unless defined wantarray;
 
@@ -221,8 +225,6 @@ sub _wrap_method
         Variable::Magic::cast(%_, $wizard, 
             stash        => $stash,
             parameters   => $parameters,
-            keys         => [ map {$_->name} @$parameters ],
-            processed    => [ keys %_ ],
             self         => \$_[0],
         );
         local *{$package_name.'::self'} = \$_[0];
@@ -237,7 +239,7 @@ sub _wrap_method
 
 sub wrap
 {
-    my ($coderef, $stash, $paramerers, $key, $prototype) = @_;
+    my ($coderef, $stash, $parameters, $key, $prototype) = @_;
     my $wizard = MooseX::Params::Util::Magic->new;
 	my $package_name = $stash->name;
     
@@ -344,7 +346,7 @@ sub _process_parameters
     my $meta = Class::MOP::Class->initialize($package_name);
 	my $method = $meta->get_method($method_name);
 
-	my @parameter_objects = $method->get_parameters if $method->has_parameters;
+	my @parameter_objects = $method->all_parameters if $method->has_parameters;
 
     return unless @parameter_objects;
 
@@ -445,8 +447,10 @@ sub _inflate_parameters
 		push @inflated_parameters, $parameter;
 		$position++;
 	}
+	
+	my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
 
-	return @inflated_parameters;
+	return %inflated_parameters;
 }
 
 

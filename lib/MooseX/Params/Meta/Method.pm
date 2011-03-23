@@ -10,13 +10,15 @@ extends 'Moose::Meta::Method';
 has 'parameters' =>
 (
 	is        => 'rw',
-	isa       => 'ArrayRef',
-	traits    => ['Array'],
+	isa       => 'HashRef',
+	traits    => ['Hash'],
 	predicate => 'has_parameters',
 	handles   =>
 	{
-		get_parameters => 'elements',
-		add_parameter  => 'push',
+		all_parameters => 'values',
+		add_parameter  => 'set',
+		get_parameter  => 'get',
+		get_parameters => 'get',
 	},
 );
 
@@ -39,13 +41,6 @@ has '_execute' =>
     is  => 'ro',
     isa => 'Str',
 );
-
-sub get_parameters_by_name
-{
-	my ($self, @names) = @_;
-
-	return grep { $_->name ~~ @names } $self->get_parameters if $self->has_parameters;
-}
 
 sub _validate_parameters
 {
