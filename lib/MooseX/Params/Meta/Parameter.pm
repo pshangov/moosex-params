@@ -114,7 +114,7 @@ has 'builder_sub' =>
 		elsif ($builder)
 		{
 			my $stash = Package::Stash->new($self->package);
-			return $stash->get_symbol($builder);
+			return $stash->get_symbol("&$builder");
 		}
 		else
 		{

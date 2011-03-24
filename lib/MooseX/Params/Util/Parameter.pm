@@ -10,6 +10,7 @@ use Scalar::Util qw(isweak);
 use Class::MOP::Class;
 use Package::Stash;
 use Perl6::Caller;
+use Devel::Dwarn;
 
 sub check_required
 {
@@ -26,7 +27,7 @@ sub check_required
 
 sub build
 {
-    my ($param, $stash, $default_only) = @_;
+    my ($param, $stash) = @_;
 
     my $value;
 
@@ -46,7 +47,6 @@ sub build
         }
         else
         {
-            return if $default_only;
             my $coderef = $stash->get_symbol('&' . $param->builder);
             Carp::croak("Cannot find builder " . $param->builder) unless $coderef;        
         }
@@ -72,11 +72,11 @@ sub wrap
 		# localize $self
         my $self = $_[0];
 		no strict 'refs';
-        local *{$package_name.'::self'} = \$self;
+        local *{$package_name.'::self'} = $key ? $self : \$self;
         use strict 'refs';
         
 		# localize and enchant %_
-		local %_ = process(@_);
+		local %_ = $key ? @_[1 .. $#_] : process(@_);
         Variable::Magic::cast(%_, $wizard,
 			parameters => $parameters,
             self       => \$self,       # needed to pass as first argument to parameter builders
@@ -88,9 +88,8 @@ sub wrap
         if ($key)
 		{
 			my $value = $coderef->($self, %_);
-            $value = MooseX::Params::Util::validate($parameters->{$key}, $value);
-			$_{$key} = $value;
-            return %_;
+            $value = MooseX::Params::Util::Parameter::validate($parameters->{$key}, $value);
+            return %_, $key => $value;
         }
 		# execute for a method
         else
@@ -112,7 +111,7 @@ sub process
    	my $frame = 1;
 	my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
     my $stash = Package::Stash->new($package_name);
-	
+
     my $meta = Class::MOP::Class->initialize($package_name);
 	my $method = $meta->get_method($method_name);
 
@@ -150,20 +149,28 @@ sub process
         }
         
         my $is_required = $param->required;
-        my $has_default = defined $param->default;
+		my $is_lazy = $param->lazy;
+        my $has_default = ( defined $param->default or $param->builder );
 
         my $value;
-        
-        if ( !$is_set and $is_required )
+       
+		# if required but not set, attempt to build the value
+        if ( !$is_set and !$is_lazy and $is_required )
         {
             MooseX::Params::Util::Parameter::check_required($param);
             $value = MooseX::Params::Util::Parameter::build($param, $stash);
         }
-        elsif ( !$is_set and !$is_required and $has_default )
-        {
-            $value = MooseX::Params::Util::Parameter::build($param, $stash, 1); 
-        }
-        else
+		# if not required and not set, but not lazy either, check for a default
+		elsif ( !$is_set and !$is_required and !$is_lazy and $has_default )
+		{
+		    $value = MooseX::Params::Util::Parameter::build($param, $stash); 
+		}
+		# lazy parameters are built later
+		elsif ( !$is_set and $is_lazy)
+		{
+			next;
+		}
+        elsif ( $is_set )
         {
             $value = $original_value;
         }

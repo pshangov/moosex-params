@@ -28,7 +28,7 @@ sub fetch
     return if exists $ref->{$key};
 	
 	my $builder = $data->get_parameter($key)->builder_sub;
-    my $wrapped = $data->wrap($builder, $data->{stash}, $key);
+    my $wrapped = $data->wrap($builder, $data->package, $data->parameters, $key);
 
 	# this check should not be necessary
     if ($builder)
