@@ -7,7 +7,6 @@ use Carp ();
 use MooseX::Params::Util::Parameter;
 use MooseX::Params::Magic::Data;
 use parent 'MooseX::Params::Magic::Base';
-use Devel::Dwarn;
 
 sub data
 { 

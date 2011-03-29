@@ -56,4 +56,6 @@ sub _build_lazy
 	return \@lazy;
 }
 
+no Moose;
+
 1;

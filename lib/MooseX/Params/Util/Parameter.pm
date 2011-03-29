@@ -2,7 +2,7 @@ package MooseX::Params::Util::Parameter;
 
 use strict;
 use warnings;
-
+use 5.10.0;
 use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Try::Tiny qw(try catch);
 use List::Util qw(max);
@@ -10,7 +10,7 @@ use Scalar::Util qw(isweak);
 use Class::MOP::Class;
 use Package::Stash;
 use Perl6::Caller;
-use Devel::Dwarn;
+use B::Hooks::EndOfScope qw(on_scope_end); # magic fails without this, have to find out why ...
 
 sub check_required
 {
