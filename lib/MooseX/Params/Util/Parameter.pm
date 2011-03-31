@@ -1,5 +1,7 @@
 package MooseX::Params::Util::Parameter;
 
+# ABSTRACT: Parameter processing utilities
+
 use strict;
 use warnings;
 use 5.10.0;

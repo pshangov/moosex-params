@@ -1,5 +1,7 @@
 package MooseX::Params::Meta::Parameter;
 
+# ABSTRACT: The parameter metarole
+
 use Moose;
 use Package::Stash;
 

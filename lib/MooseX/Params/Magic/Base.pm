@@ -1,5 +1,7 @@
 package MooseX::Params::Magic::Base;
 
+# ABSTRACT: Base class for building Variable::Magic wizards
+
 use strict;
 use warnings;
 

@@ -1,5 +1,7 @@
 use 5.010;
 
+# ABSTRACT: The method metarole
+
 package MooseX::Params::Meta::Method;
 
 use Moose;

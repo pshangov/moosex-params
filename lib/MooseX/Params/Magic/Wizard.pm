@@ -1,5 +1,7 @@
 package MooseX::Params::Magic::Wizard;
 
+# ABSTRACT: Magic behavior for %_
+
 use 5.010;
 use strict;
 use warnings;

@@ -1,5 +1,7 @@
 package MooseX::Params::Magic::Data;
 
+# ABSTRACT: Base class for wizard data object
+
 use 5.010;
 use Moose;
 
