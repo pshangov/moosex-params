@@ -1,0 +1,8 @@
+Revision history for MooseX-Params
+
+0.002   01/04/2011
+        * Fixed dos line endings
+		* Removed tabs
+
+0.001   31/03/2011
+        * Initial upload to CPAN
