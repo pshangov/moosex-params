@@ -8,18 +8,18 @@ use Test::Most;
 
     use MooseX::Params;
 
-    method 'name' => 
+    method 'name' =>
     (
-        params => [ 
+        params => [
             'first' => { isa => 'Str', type => 'named' },
             'last'  => { isa => 'Str', type => 'named' },
         ],
         sub { "$_{first} $_{last}" }
     );
 
-    method 'title' => 
+    method 'title' =>
     (
-        params => [ 
+        params => [
             'name'  => { isa => 'Str' },
             'title' => { isa => 'Str', type => 'named' },
         ],

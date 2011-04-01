@@ -3,11 +3,11 @@ use MooseX::Params;
 method test
     => params( qw(first second third) )
     => returns( scalar => 'Str', list => 'ArrayRef' )
-    => execute 
+    => execute
 {
-    return lc $_{first};   
+    return lc $_{first};
 },
-    => check 
+    => check
 {
     return 1;
 };
@@ -19,5 +19,5 @@ sub test
     :Traits(Subcommand)
     :CmdFlag(test)
 {
-    
+
 }

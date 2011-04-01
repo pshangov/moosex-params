@@ -13,12 +13,12 @@ use Test::Most;
     method 'test_execute'  => ( execute => sub { 'OK' } );
     method 'test_string'   => ( execute => '_execute_test_string' );
 
-    method 'test_default'; 
+    method 'test_default';
     method 'test_default_with_options' => ( params => ['any'] );
 
-    sub _execute_test_string  { 'OK' }   
-    sub _execute_test_default { 'OK' }   
-    sub _execute_test_default_with_options { 'OK' }   
+    sub _execute_test_string  { 'OK' }
+    sub _execute_test_default { 'OK' }
+    sub _execute_test_default_with_options { 'OK' }
 
     no MooseX::Params;
 }

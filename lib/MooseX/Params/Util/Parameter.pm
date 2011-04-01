@@ -17,7 +17,7 @@ use B::Hooks::EndOfScope qw(on_scope_end); # magic fails without this, have to f
 sub check_required
 {
     my $param = shift;
-    
+
     my $has_default = defined ($param->default) or $param->builder;
     my $is_required = $param->required;
 
@@ -38,8 +38,8 @@ sub build
     if (defined $default and ref($default) ne 'CODE')
     {
         $value = $default;
-    } 
-    else 
+    }
+    else
     {
         my $coderef;
 
@@ -50,13 +50,13 @@ sub build
         else
         {
             my $coderef = $stash->get_symbol('&' . $param->builder);
-            Carp::croak("Cannot find builder " . $param->builder) unless $coderef;        
+            Carp::croak("Cannot find builder " . $param->builder) unless $coderef;
         }
 
         $value = try {
             $coderef->();
         } catch {
-            Carp::croak("Error executing builder for parameter " . $param->name . ": $_");        
+            Carp::croak("Error executing builder for parameter " . $param->name . ": $_");
         };
     }
 
@@ -68,32 +68,32 @@ sub wrap
     my ($coderef, $package_name, $parameters, $key, $prototype) = @_;
 
     my $wizard = MooseX::Params::Magic::Wizard->new;
-    
-    my $wrapped = sub 
+
+    my $wrapped = sub
     {
-		# localize $self
+        # localize $self
         my $self = $_[0];
-		no strict 'refs';
+        no strict 'refs';
         local *{$package_name.'::self'} = $key ? $self : \$self;
         use strict 'refs';
-        
-		# localize and enchant %_
-		local %_ = $key ? @_[1 .. $#_] : process(@_);
+
+        # localize and enchant %_
+        local %_ = $key ? @_[1 .. $#_] : process(@_);
         Variable::Magic::cast(%_, $wizard,
-			parameters => $parameters,
+            parameters => $parameters,
             self       => \$self,       # needed to pass as first argument to parameter builders
-			wrapper    => \&wrap,
-			package    => $package_name,
+            wrapper    => \&wrap,
+            package    => $package_name,
         );
 
-		# execute for a parameter builder
+        # execute for a parameter builder
         if ($key)
-		{
-			my $value = $coderef->($self, %_);
+        {
+            my $value = $coderef->($self, %_);
             $value = MooseX::Params::Util::Parameter::validate($parameters->{$key}, $value);
             return %_, $key => $value;
         }
-		# execute for a method
+        # execute for a method
         else
         {
             return $coderef->(@_);
@@ -102,7 +102,7 @@ sub wrap
 
     set_prototype($wrapped, $prototype) if $prototype;
 
-	return $wrapped;
+    return $wrapped;
 }
 
 sub process
@@ -110,24 +110,24 @@ sub process
     my @parameters = @_;
     my $last_index = $#parameters;
 
-   	my $frame = 1;
-	my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+    my $frame = 1;
+    my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
     my $stash = Package::Stash->new($package_name);
 
     my $meta = Class::MOP::Class->initialize($package_name);
-	my $method = $meta->get_method($method_name);
+    my $method = $meta->get_method($method_name);
 
-	my @parameter_objects = $method->all_parameters if $method->has_parameters;
+    my @parameter_objects = $method->all_parameters if $method->has_parameters;
 
     return unless @parameter_objects;
 
     my $offset = $method->index_offset;
 
-    my $last_positional_index = max 
-        map  { $_->index + $offset } 
-        grep { $_->type eq 'positional' } 
+    my $last_positional_index = max
+        map  { $_->index + $offset }
+        grep { $_->type eq 'positional' }
         @parameter_objects;
-       
+
     $last_positional_index++;
 
     my %named = @parameters[ $last_positional_index .. $last_index ];
@@ -135,7 +135,7 @@ sub process
     my %return_values;
 
     foreach my $param (@parameter_objects)
-    {   
+    {
         my ( $is_set, $original_value );
 
         if ( $param->type eq 'positional' )
@@ -149,29 +149,29 @@ sub process
             $is_set = exists $named{$param->name};
             $original_value = $named{$param->name} if $is_set;
         }
-        
+
         my $is_required = $param->required;
-		my $is_lazy = $param->lazy;
+        my $is_lazy = $param->lazy;
         my $has_default = ( defined $param->default or $param->builder );
 
         my $value;
-       
-		# if required but not set, attempt to build the value
+
+        # if required but not set, attempt to build the value
         if ( !$is_set and !$is_lazy and $is_required )
         {
             MooseX::Params::Util::Parameter::check_required($param);
             $value = MooseX::Params::Util::Parameter::build($param, $stash);
         }
-		# if not required and not set, but not lazy either, check for a default
-		elsif ( !$is_set and !$is_required and !$is_lazy and $has_default )
-		{
-		    $value = MooseX::Params::Util::Parameter::build($param, $stash); 
-		}
-		# lazy parameters are built later
-		elsif ( !$is_set and $is_lazy)
-		{
-			next;
-		}
+        # if not required and not set, but not lazy either, check for a default
+        elsif ( !$is_set and !$is_required and !$is_lazy and $has_default )
+        {
+            $value = MooseX::Params::Util::Parameter::build($param, $stash);
+        }
+        # lazy parameters are built later
+        elsif ( !$is_set and $is_lazy)
+        {
+            next;
+        }
         elsif ( $is_set )
         {
             $value = $original_value;
@@ -187,7 +187,7 @@ sub process
             #weaken($return_values{$param->name});
         }
     }
-   
+
     return %return_values;
 }
 
@@ -200,7 +200,7 @@ sub validate
     {
         my $constraint = find_type_constraint($param->constraint)
             or Carp::croak("Could not find definition of type '" . $param->constraint . "'");
-        
+
         # coerce
         if ($param->coerce and $constraint->has_coercion)
         {

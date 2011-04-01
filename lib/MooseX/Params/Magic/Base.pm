@@ -8,7 +8,7 @@ use warnings;
 use Variable::Magic ();
 use Package::Stash  ();
 
-sub new 
+sub new
 {
     my $stash = Package::Stash->new(shift);
 
@@ -26,7 +26,7 @@ sub new
         exists
         delete
         copy_key
-        op_info  
+        op_info
     );
 
     my %map;

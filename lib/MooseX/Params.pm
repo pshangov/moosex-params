@@ -18,8 +18,8 @@ use Package::Stash;
 my $wizard = MooseX::Params::Magic::Wizard->new;
 
 my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
-	with_meta => [qw(method)],
-	also      => 'Moose',
+    with_meta => [qw(method)],
+    also      => 'Moose',
     install   => [qw(unimport)]
 );
 
@@ -33,102 +33,102 @@ sub import {
     goto &$import;
 }
 
-sub init_meta 
+sub init_meta
 {
-	shift;
-	my %args = @_;
-	Moose->init_meta(%args);
-	Moose::Util::MetaRole::apply_metaroles(
-		for => $args{for_class},
-		class_metaroles => { class => ['MooseX::Params::Meta::Class'] },
-	);
+    shift;
+    my %args = @_;
+    Moose->init_meta(%args);
+    Moose::Util::MetaRole::apply_metaroles(
+        for => $args{for_class},
+        class_metaroles => { class => ['MooseX::Params::Meta::Class'] },
+    );
 }
 
 sub method
 {
-	my ( $meta, $name, @options ) = @_;
+    my ( $meta, $name, @options ) = @_;
 
-	my $stash = Package::Stash->new($meta->{package});
-	my ($coderef, %options);
+    my $stash = Package::Stash->new($meta->{package});
+    my ($coderef, %options);
 
-	if (!@options)
-	{
-		$options{execute} = "_execute_$name";
-		$coderef = $stash->get_symbol('&' . $options{execute});
-	}
-	elsif (@options == 1 and ref $options[0] eq 'CODE')
-	{
-		$coderef = shift @options;
-	}
-	elsif (@options % 2 and ref $options[-1] eq 'CODE')
-	{
-		$coderef = pop @options;
-		%options = @options;
-		
-		if ($options{execute})
-		{
-			Carp::croak("Cannot create method: we found both an 'execute' option and a trailing coderef");
-		}
-	}
-	elsif (!(@options % 2))
-	{
-		%options = @options;
-		
-		if ( exists $options{execute} )
-		{
-			my $reftype = ref $options{execute};
-			if (!$reftype)
-			{
-				$coderef = $stash->get_symbol('&' . $options{execute});
-			}
-			elsif ($reftype eq 'CODE')
-			{
-				$coderef = $options{execute};
-			}
-			else
-			{
-				Carp::croak("Option 'execute' must be a coderef, not $reftype");
-			}
-		}
-		else
-		{
+    if (!@options)
+    {
+        $options{execute} = "_execute_$name";
+        $coderef = $stash->get_symbol('&' . $options{execute});
+    }
+    elsif (@options == 1 and ref $options[0] eq 'CODE')
+    {
+        $coderef = shift @options;
+    }
+    elsif (@options % 2 and ref $options[-1] eq 'CODE')
+    {
+        $coderef = pop @options;
+        %options = @options;
+
+        if ($options{execute})
+        {
+            Carp::croak("Cannot create method: we found both an 'execute' option and a trailing coderef");
+        }
+    }
+    elsif (!(@options % 2))
+    {
+        %options = @options;
+
+        if ( exists $options{execute} )
+        {
+            my $reftype = ref $options{execute};
+            if (!$reftype)
+            {
+                $coderef = $stash->get_symbol('&' . $options{execute});
+            }
+            elsif ($reftype eq 'CODE')
+            {
+                $coderef = $options{execute};
+            }
+            else
+            {
+                Carp::croak("Option 'execute' must be a coderef, not $reftype");
+            }
+        }
+        else
+        {
             $options{execute} = "_execute_$name";
-			$coderef = $stash->get_symbol('&' . $options{execute});
-		}
-	}
-	else
-	{
-		Carp::croak("Cannot create method $name: invalid arguments");
-	}
+            $coderef = $stash->get_symbol('&' . $options{execute});
+        }
+    }
+    else
+    {
+        Carp::croak("Cannot create method $name: invalid arguments");
+    }
 
-	my %parameters;
-	if (%options)
-	{
-		if ($options{params})
-		{
-			if (ref $options{params} eq 'ARRAY')
-			{
-				%parameters = _inflate_parameters($meta->{package}, @{$options{params}});
-			}
-			#elsif ($options{params} eq 'HASH') { }
-			else
-			{
-				Carp::croak("Argument to 'params' must be either an arrayref or a hashref");
-			}
-		}
-	}
+    my %parameters;
+    if (%options)
+    {
+        if ($options{params})
+        {
+            if (ref $options{params} eq 'ARRAY')
+            {
+                %parameters = _inflate_parameters($meta->{package}, @{$options{params}});
+            }
+            #elsif ($options{params} eq 'HASH') { }
+            else
+            {
+                Carp::croak("Argument to 'params' must be either an arrayref or a hashref");
+            }
+        }
+    }
 
     my $prototype = delete $options{prototype};
     my $package_name = $meta->{package};
-	# TODO execute later (after parameters are determined)
-	my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, \%parameters, $prototype);
+    # TODO execute later (after parameters are determined)
+    my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package_name, \%parameters, $prototype);
 
-	my $method = MooseX::Params::Meta::Method->wrap(
-		$wrapped_coderef,
-		name         => $name,
-		package_name => $meta->{package},
-		parameters   => \%parameters,
-	);
+    my $method = MooseX::Params::Meta::Method->wrap(
+        $wrapped_coderef,
+        name         => $name,
+        package_name => $meta->{package},
+        parameters   => \%parameters,
+    );
 
     $meta->add_method($name, $method) unless defined wantarray;
 
@@ -137,46 +137,46 @@ sub method
 
 sub _inflate_parameters
 {
-	my $package = shift;
-	my @params = @_;
-	my $position = 0;
-	my @inflated_parameters;
+    my $package = shift;
+    my @params = @_;
+    my $position = 0;
+    my @inflated_parameters;
 
-	for ( my $i = 0; $i <= $#params; $i++ )
-	{
-		my $current = $params[$i];
-		my $next = $i < $#params ? $params[$i+1] : undef;
-		my $parameter;
-		
-		if (ref $next)
+    for ( my $i = 0; $i <= $#params; $i++ )
+    {
+        my $current = $params[$i];
+        my $next = $i < $#params ? $params[$i+1] : undef;
+        my $parameter;
+
+        if (ref $next)
         # next value is a parameter specifiction
-		{
-			$parameter = MooseX::Params::Meta::Parameter->new(
-				type    => 'positional',
-				index   => $position,
-				name    => $current,
-				package => $package,
-				%$next,
-			);
-			$i++;
-		}
-		else
-		{
-			$parameter = MooseX::Params::Meta::Parameter->new(
-				type    => 'positional',
+        {
+            $parameter = MooseX::Params::Meta::Parameter->new(
+                type    => 'positional',
                 index   => $position,
                 name    => $current,
-				package => $package,
-			);
-		}
-		
-		push @inflated_parameters, $parameter;
-		$position++;
-	}
-	
-	my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
+                package => $package,
+                %$next,
+            );
+            $i++;
+        }
+        else
+        {
+            $parameter = MooseX::Params::Meta::Parameter->new(
+                type    => 'positional',
+                index   => $position,
+                name    => $current,
+                package => $package,
+            );
+        }
 
-	return %inflated_parameters;
+        push @inflated_parameters, $parameter;
+        $position++;
+    }
+
+    my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
+
+    return %inflated_parameters;
 }
 
 ### EXPERIMENTAL STUFF ###
@@ -205,20 +205,20 @@ sub execute
 # param 'param_name' => ( ... );
 sub param
 {
-	my ( $meta, $name, %options ) = @_;
-	$meta->add_parameter($name);
+    my ( $meta, $name, %options ) = @_;
+    $meta->add_parameter($name);
 }
 
 # alternative syntax to access parameters
 # my ($first, $second, $third) = params qw(first second third);
 sub params
 {
-	my $meta = shift;
-	my @parameters = @_;
+    my $meta = shift;
+    my @parameters = @_;
 
-  	my $frame = 3;
-	my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
-    
+    my $frame = 3;
+    my ($package_name, $method_name) =  caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+
     #my $package_with_percent_underscore = 'MooseX::Params';
     my $package_with_percent_underscore = $package_name;
 
@@ -275,7 +275,7 @@ no Moose;
         params => [
             username => { required => 1, isa => 'Str' },
             password => { required => 1, isa => 'Str' },
-        ], 
+        ],
         sub {
             my $user = $self->load_user($_{username});
             $_{password} eq $user->password ? 1 : 0;
@@ -351,7 +351,7 @@ Each parameter, whether passed in a named or positional fashion, has a name. The
 
     method do_something => (
         params => [qw(first second third)],
-        sub { ... } 
+        sub { ... }
     );
 
 This declares a method with three positional parameters, called respectively C<first>, C<second> and C<third>. No validation or processing options have been specified for these parameters. You can now execute this method as:
@@ -361,12 +361,12 @@ This declares a method with three positional parameters, called respectively C<f
 =head2 C<%_> and C<$self>
 
 This module takes a somewhat radical approach to accessing method parameters. It introduces two global variables in the using module's namespace: C<%_> and C<$self>. Within a method body, C<$self> is always localized to the method's invocant. The special C<%_> hash contains the processed values of all parameters passed to the method:
-    
+
     has separator => ( is => 'ro', isa => 'Str', default => ',' );
-    
+
     method print_something => (
         params => [qw(first second third)],
-        sub { print join $self->separator, @_{qw(first second third)} } 
+        sub { print join $self->separator, @_{qw(first second third)} }
     );
 
 Note that C<%_> is a read-only hash: any attempt to assign values to it will currently throw an exception. An exception will also be thrown if you attempt to access an element whose key is not a valid parameter name. C<@_> is also available if you want to do traditional-style unpacking of your parameters.
@@ -378,7 +378,7 @@ The downside of the current implementation is that functions called from within 
 The main purpose of this module is to bring the full power of L<Moose> attributes to parameter processing. From the L<Moose> documentation:
 
     Moose attributes have many properties, and attributes are probably the single most powerful and flexible part of Moose.
-    You can create a powerful class simply by declaring attributes. 
+    You can create a powerful class simply by declaring attributes.
     In fact, it's possible to have classes that consist solely of attribute declarations.
 
 Therefore, the parameter declaration API aims to mirror C<Moose>'s attribute API as close as possible:
@@ -387,7 +387,7 @@ Therefore, the parameter declaration API aims to mirror C<Moose>'s attribute API
         params => [
             username => { required => 1, isa => 'Str' },
             password => { required => 1, isa => 'Str' },
-        ], 
+        ],
         sub {
             my $user = $self->load_user($_{username});
             $_{password} eq $user->password ? 1 : 0;
@@ -418,7 +418,7 @@ Lazy building requires some explanation. As with L<Moose> attributes, the value 
             username => { required => 1, isa => 'Str' },
             password => { required => 1, isa => 'Str' },
             user     => { lazy => 1, builder => '_build_param_user' },
-        ], 
+        ],
         sub {
             return unless $self->login_enabled;
             $_{password} eq $_{user}->password ? 1 : 0;
@@ -441,7 +441,7 @@ By default all parameters are positional. You can ask for named parameters via t
         params => [
             username => { required => 1, isa => 'Str', type => 'named' },
             password => { required => 1, isa => 'Str', type => 'named' },
-        ], 
+        ],
         sub { ...  }
     );
 
@@ -455,7 +455,7 @@ You can also mix named and positional parameters, as long as all positional para
             password => { required => 1, isa => 'Str', type => 'positional' },
             remember => { isa => 'Bool', type => 'named' },
             secure   => { isa => 'Bool', type => 'named' },
-        ], 
+        ],
         sub { ...  }
     );
 

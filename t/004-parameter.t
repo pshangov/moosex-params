@@ -10,27 +10,27 @@ use Scalar::Util qw(isweak);
     use MooseX::Params;
     use Moose::Util::TypeConstraints;
 
-    method 'test_isa' => 
+    method 'test_isa' =>
     (
         params => [ 'first' => { isa => 'Int'} ],
         sub { $_{first} }
-    ); 
+    );
 
     method 'test_required' =>
     (
         params => [ 'first' => { required => 1 } ],
         sub { $_{first} }
     );
-    
+
     subtype 'ArrayRefOfInt' => as 'ArrayRef[Int]';
 
     coerce 'ArrayRefOfInt'
         => from 'Int'
         => via { [ $_ ] };
-    
-    method 'test_transform' => 
+
+    method 'test_transform' =>
     (
-        params => 
+        params =>
         [
             first  => { isa => 'ArrayRefOfInt', coerce   => 1 },
             second => { isa => 'ArrayRefOfInt', weak_ref => 1 },
