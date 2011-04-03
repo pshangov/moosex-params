@@ -1,0 +1,6 @@
+MooseX::Params on CPAN
+======================
+
+An alpha versin of MooseX::Params, described in ()[my previous post], is already on CPAN. MooseX::Params is an attempt to rethink parameter processing and function declaration in Perl. The current release implements the three main objectives: a meta protocol, parameters with lazy builders, and access to processed parameters via the `%_` hash.
+
+I am now experimenting with different ways to make the syntax more concise and more perlish. I am looking into subroutine attributes, extra keywords and Devel::Declare. There are already have some cool ideas which I will share in an upcoming post. 
