@@ -1,5 +1,8 @@
 Revision history for MooseX-Params
 
+0.003   08/04/2011
+        * Add mimimum required version of Package::Stash
+
 0.002   01/04/2011
         * Fixed dos line endings
 		* Removed tabs
