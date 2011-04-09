@@ -196,9 +196,32 @@ sub simple_sub
 
 sub doit 
 	:Private :Memoized
-	:Params(&Str *first! = _build_param_first, Int :count(number)?, ArrayRef[Sth] :collection?)
+	:Params(&Str *first! = _build_param_first(), Int :count(number)?, ArrayRef[Sth] :collection?)
 	:Returns(Array[Str])
 {
 	...	
 }	
 
+sub doit 
+(
+	first  => { isa => 'Str', required => 1 },
+	second => { isa => 'Int', required => 1 },
+)
+	:Private :Memoized
+	:Returs(Array[Str])
+	:Traits(Subcommand)
+	:Check(_check_doit)
+{
+	
+	return 1;
+}
+
+sub doit 
+	:Method 
+	:Accepts( first  => { isa => 'Str', required => 1 },
+		      second => { isa => 'Int', required => 1 } ) 
+	:Returns( Array[Str] ) 
+	:FormFu( before_submit => 'test_form', submited_and_valid => 'update' )
+{
+	...	
+}
