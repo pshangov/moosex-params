@@ -13,6 +13,7 @@ use Class::MOP::Class;
 use Package::Stash;
 use Perl6::Caller;
 use B::Hooks::EndOfScope qw(on_scope_end); # magic fails without this, have to find out why ...
+use Text::CSV_XS;
 
 sub check_required
 {
@@ -213,5 +214,50 @@ sub validate
     return $value;
 }
 
+sub parse_params_attribute
+{
+    my $string = shift;
+    my @params;
+
+    my $csv_parser = Text::CSV_XS->new({ allow_loose_quotes => 1 });
+    $csv_parser->parse($string) or Carp::croak("Cannot parse param specs");
+
+    my $format = qr/^\s*
+        ((?<coerce>\&)?(?<type>\w+)\s+)?
+        (?<name>\w+)
+        (?<required>[!?])?\s*
+        ( 
+            (?<default>[=~])\s*(
+                  (?<number> \d+ )
+                | ( (?<code>\w+) (\(\))? )
+                | ( (?<delimiter>["']) (?<string>.*) \g{delimiter} )
+             )? 
+        )?
+    \s*$/x;
+
+    
+    foreach my $param ($csv_parser->fields)
+    {
+        warn $param;
+
+        if ($param =~ $format)
+        {
+            my $options = 
+            {
+                name      => $+{name},
+                type      => $+{type},
+                coerce    => $+{coerce} ? 1 : 0,
+                required  => $+{required} ne '?' ? 1 : 0,
+                lazy      => $+{default} eq '~' ? 1 : 0,
+                code      => $+{code},
+                string    => $+{string},
+                number    => $+{number},
+            };
+            push @params, $options;
+        }
+    }
+
+    return @params;
+}
 
 1;
