@@ -219,13 +219,25 @@ sub parse_params_attribute
     my $string = shift;
     my @params;
 
+    $string =~ s/\R//g;
+
     my $csv_parser = Text::CSV_XS->new({ allow_loose_quotes => 1 });
     $csv_parser->parse($string) or Carp::croak("Cannot parse param specs");
 
-    my $format = qr/^\s*
-        ((?<coerce>\&)?(?<type>\w+)\s+)?
-        (?<name>\w+)
-        (?<required>[!?])?\s*
+    my $format = qr/^
+        # TYPE AND COERCION
+        ( (?<coerce>\&)? (?<type> [\w\:\[\]]+) \s+ )?
+
+        # NAME
+        (
+             ( (?<named>:) (?<init_arg>\w*) \( (?<name>\w+) \) )
+            |( (?<named>:)?                    (?<name>\w+) )    
+        )
+        
+        # REQUIRED OR OPTIONAL
+        (?<required>[!?])? \s*
+        
+        # DEFAULT VALUE
         ( 
             (?<default>[=~])\s*(
                   (?<number> \d+ )
@@ -233,27 +245,35 @@ sub parse_params_attribute
                 | ( (?<delimiter>["']) (?<string>.*) \g{delimiter} )
              )? 
         )?
-    \s*$/x;
+
+    $/x;
 
     
     foreach my $param ($csv_parser->fields)
     {
-        warn $param;
+        $param =~ s/^\s*//;
+        $param =~ s/\s*$//;
 
         if ($param =~ $format)
         {
-            my $options = 
-            {
-                name      => $+{name},
-                type      => $+{type},
-                coerce    => $+{coerce} ? 1 : 0,
-                required  => $+{required} ne '?' ? 1 : 0,
-                lazy      => $+{default} eq '~' ? 1 : 0,
-                code      => $+{code},
-                string    => $+{string},
-                number    => $+{number},
-            };
-            push @params, $options;
+            my %options = 
+            (
+                name     => $+{name},
+                isa      => defined $+{type} ? $+{type} : undef,
+                coerce   => $+{coerce} ? 1 : 0,
+                type     => $+{named} ? 'named' : 'positional',
+                required => ( defined $+{required} and $+{required} eq '?' ) ? 0 : 1,
+                lazy     => ( defined $+{default}  and $+{default}  eq '~' ) ? 1 : 0,
+                code     => $+{code},
+                value    => defined $+{number} ? $+{number} : $+{string},
+                init_arg => $+{init_arg},
+            );
+
+            push @params, \%options;
+        }
+        else
+        {
+            Carp::croak "Error parsing parameter specification '$param'";
         }
     }
 

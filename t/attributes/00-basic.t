@@ -12,9 +12,16 @@ use Test::Most;
         return 1;
     }
 
+    sub complex :Params(
+        Str test, 
+        &ArrayRef[Int] number, 
+        :named(simple)?
+    ) {
+        return 1;
+    }
 }
 
-diag TestExecute::test();
+#diag TestExecute::test();
 
 ok 1;
 
