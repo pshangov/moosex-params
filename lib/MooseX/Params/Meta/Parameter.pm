@@ -29,8 +29,14 @@ has 'index' =>
 has 'constraint' =>
 (
     is       => 'rw',
-    isa      => 'Str',
+    isa      => 'Maybe[Str]',
     init_arg => 'isa',
+);
+
+has 'init_arg' =>
+(
+    is       => 'rw',
+    isa      => 'Maybe[Str]',
 );
 
 has 'default' =>
@@ -80,6 +86,13 @@ has 'auto_deref' =>
     isa => 'Bool',
 );
 
+has 'slurpy' =>
+(
+    is      => 'rw',
+    isa     => 'Bool',
+);
+
+
 has 'lazy_build' =>
 (
     is      => 'rw',
@@ -95,7 +108,7 @@ has 'lazy_build' =>
 has 'builder' =>
 (
     is  => 'rw',
-    isa => 'Str',
+    isa => 'Maybe[Str]',
 );
 
 has 'builder_sub' =>

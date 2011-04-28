@@ -14,6 +14,8 @@ use Package::Stash;
 use Perl6::Caller;
 use B::Hooks::EndOfScope qw(on_scope_end); # magic fails without this, have to find out why ...
 use Text::CSV_XS;
+use MooseX::Params::Meta::Parameter;
+use MooseX::Params::Magic::Wizard;
 
 sub check_required
 {
@@ -228,10 +230,13 @@ sub parse_params_attribute
         # TYPE AND COERCION
         ( (?<coerce>\&)? (?<type> [\w\:\[\]]+) \s+ )?
 
+        # SLURPY
+        (?<slurpy>\*)?
+
         # NAME
         (
              ( (?<named>:) (?<init_arg>\w*) \( (?<name>\w+) \) )
-            |( (?<named>:)?                    (?<name>\w+) )    
+            |( (?<named>:)?                    (?<init_arg>(?<name>\w+)) )    
         )
         
         # REQUIRED OR OPTIONAL
@@ -239,7 +244,7 @@ sub parse_params_attribute
         
         # DEFAULT VALUE
         ( 
-            (?<default>[=~])\s*(
+            (?<default>=)\s*(
                   (?<number> \d+ )
                 | ( (?<code>\w+) (\(\))? )
                 | ( (?<delimiter>["']) (?<string>.*) \g{delimiter} )
@@ -259,14 +264,16 @@ sub parse_params_attribute
             my %options = 
             (
                 name     => $+{name},
+                init_arg => $+{init_arg} eq '' ? undef : $+{init_arg},
+                required => ( defined $+{required} and $+{required} eq '?' ) ? 0 : 1,
+                type     => $+{named} ? 'named' : 'positional',
+                slurpy   => $+{slurpy} ? 1 : 0,
                 isa      => defined $+{type} ? $+{type} : undef,
                 coerce   => $+{coerce} ? 1 : 0,
-                type     => $+{named} ? 'named' : 'positional',
-                required => ( defined $+{required} and $+{required} eq '?' ) ? 0 : 1,
-                lazy     => ( defined $+{default}  and $+{default}  eq '~' ) ? 1 : 0,
-                code     => $+{code},
-                value    => defined $+{number} ? $+{number} : $+{string},
-                init_arg => $+{init_arg},
+                default  => defined $+{number} ? $+{number} : $+{string},
+                builder  => ( defined $+{default} and not defined $+{number} and not defined $+{string} ) 
+                                ? ( defined $+{code} ? $+{code} : "_build_param_$+{name}" ) : undef,
+                lazy     => ( defined $+{default} and not defined $+{number} and not defined $+{string} ) ? 1 : 0,
             );
 
             push @params, \%options;
@@ -278,6 +285,50 @@ sub parse_params_attribute
     }
 
     return @params;
+}
+
+sub inflate_parameters
+{
+    my $package = shift;
+    my @params = @_;
+    my $position = 0;
+    my @inflated_parameters;
+
+    for ( my $i = 0; $i <= $#params; $i++ )
+    {
+        my $current = $params[$i];
+        my $next = $i < $#params ? $params[$i+1] : undef;
+        my $parameter;
+
+        if (ref $next)
+        # next value is a parameter specifiction
+        {
+            $parameter = MooseX::Params::Meta::Parameter->new(
+                type    => 'positional',
+                index   => $position,
+                name    => $current,
+                package => $package,
+                %$next,
+            );
+            $i++;
+        }
+        else
+        {
+            $parameter = MooseX::Params::Meta::Parameter->new(
+                type    => 'positional',
+                index   => $position,
+                name    => $current,
+                package => $package,
+            );
+        }
+
+        push @inflated_parameters, $parameter;
+        $position++;
+    }
+
+    my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
+
+    return %inflated_parameters;
 }
 
 1;

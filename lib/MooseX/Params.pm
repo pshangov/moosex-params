@@ -108,7 +108,7 @@ sub method
         {
             if (ref $options{params} eq 'ARRAY')
             {
-                %parameters = _inflate_parameters($meta->{package}, @{$options{params}});
+                %parameters = MooseX::Params::Util::Parameter::inflate_parameters($meta->{package}, @{$options{params}});
             }
             #elsif ($options{params} eq 'HASH') { }
             else
@@ -133,50 +133,6 @@ sub method
     $meta->add_method($name, $method) unless defined wantarray;
 
     return $method;
-}
-
-sub _inflate_parameters
-{
-    my $package = shift;
-    my @params = @_;
-    my $position = 0;
-    my @inflated_parameters;
-
-    for ( my $i = 0; $i <= $#params; $i++ )
-    {
-        my $current = $params[$i];
-        my $next = $i < $#params ? $params[$i+1] : undef;
-        my $parameter;
-
-        if (ref $next)
-        # next value is a parameter specifiction
-        {
-            $parameter = MooseX::Params::Meta::Parameter->new(
-                type    => 'positional',
-                index   => $position,
-                name    => $current,
-                package => $package,
-                %$next,
-            );
-            $i++;
-        }
-        else
-        {
-            $parameter = MooseX::Params::Meta::Parameter->new(
-                type    => 'positional',
-                index   => $position,
-                name    => $current,
-                package => $package,
-            );
-        }
-
-        push @inflated_parameters, $parameter;
-        $position++;
-    }
-
-    my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
-
-    return %inflated_parameters;
 }
 
 ### EXPERIMENTAL STUFF ###
