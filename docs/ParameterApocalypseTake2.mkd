@@ -1,0 +1,89 @@
+The Parameter Apocalypse, Take 2
+================================
+
+This is a follow-up to my previous posts at http://mechanicalrevolution.com/blog/parameter_apocalypse.html and http://mechanicalrevolution.com/blog/moosex_params_on_cpan.html.
+
+After experimenting with a lot of different ways to tackle method and parameter declaration, I think I have finally settled on an attributes-based interface that makes for a decent compromise between usability and compatibility. The examples blow describe the proposed interface. Note that only the `:Args` attribute is currently implemented.
+
+Subroutine attributes are evil, but still very convenient since they allow for a syntax that is clear and concise and does not depend on parser hooks. More importantly, if a `method` keyword is introduced in Perl 5.16, this syntax will be fully compatible with it too. I'd be glad to hear feedback from folks who have used attributes for larger projects and what kinds of issues they have encountered.
+
+Parameter processing
+--------------------
+
+A method is declared as plain perl subroutine, with optional `Args` attribute listing the accepted arguments:
+
+    use Moose;
+    use MooseX::Params::Interface::Attributes;
+
+    sub doit :Args(first, second, third)
+    {
+        # you can now use $_{first}, $_{second}, and $_{third}
+    }
+
+The signature syntax is heavily influenced by Perl 6. Here is a more complicated example:
+
+    sub doit :Args(Str first = "test", &ArrayRef[Int] second?, :third = _build_param_third)
+
+The basic rules are as follows:
+
+* Parameter names are separated by commas.
+* A parameter name may be optionally preceded by a type constraint.
+* An ampersand ('&') before a type constraint indicates that coercions associated with this constraint should be executed.
+* An exclamation mark (`!`) after a parameter name makes it required (all positional parameters are required by default).
+* A question mark (`?`) after a parameter name makes it optional.
+* An asterix (`*`) before a parameter name makes it slurpy, i.e. it will consume all remaining arguments and make the available in an arrayref.
+* All parameters are by default positional.
+* Named parameters have their name is preceded by a column.
+* A named parameter can be passed by a different name from the name under which it is availabe in `%_`: `:arg_name(real_name)`.
+* You can also have values in `%_` that cannot be passed as arguments at all: `:(real_name)` (you will have to supply a default value or builder).
+* An argument can have a default value introduce by the equals (`=`) sign.
+* The default value can be either a simple unsigned integer or a quoted string; both single and double quotes can be used to quote a string, but the string itself is always interpreted as if single quotes were used: i.e. no interpolation of variables or special characters takes place.
+* The default value can also be a valid perl identifier, optionally followed by brackets (`()`), which should be the name of an existing subroutine that will be used as a builder for this parameter. Such a builder will always be executed lazily, i.e. the first time the specified parameter is accessed.
+* If the equals sign is used but no subroutine name is provided, a builder named "_build_param_${param_name}" will be assumed. The following three are equivalent: `:third = _build_param_third`, `:third = _build_param_third()`, `:third=`.
+
+You can also specify subroutines to pre-process and post-process arguments:
+
+    sub doit :Args(first, second, third) 
+             :BuildArgs(_buildargs_doit) 
+             :CheckArgs(_checkargs_doit)
+
+`BuildArgs` is analogos to `BUILDARGS` for Moose constructors and points to a name of a subroutine that will pre-process arguments before they are validated. It can be used to coerce different types of arguments to the specified signature. If no subroutine name is provided to `BuildArgs`, `"_buildargs_${method_name}"` is assumed.
+
+`CheckArgs` is analogos to `BUILD` for Moose constructors and points to a name of a subroutine that will executed after all arguments have been processed. It can be used to perform complex argument checks that cannot be implemented by simple type constraints. If no subroutine name is provided to `CheckArgs`, `"_checkargs_${method_name}"` is assumed.
+
+
+Return value validation
+-----------------------
+
+You can use the `Returns` attribute to specify a type constraint for the method's return value.
+
+    sub doit :Args(first, second, third) :Returns(Str)
+
+In order to valudate the return value, your code will always be executed in list context. If you want to return something special in scalar context, you can use the `ReturnsScalar` attribute, which allows you to choose a predifined behaviout in scalar context:
+
+    sub doit :Args(first, second, third) :Returns(Array[Str]) :ReturnsScalar(ArrayRef)
+
+`ReturnScalar` may be one of `ArrayRef`, `First`, `Last` or `Count`. See http://search.cpan.org/dist/Attribute-Context/ for an explanation.
+
+If  you want to do something really funny with context you should avoid using return value validation altogether.
+
+Traits
+------
+
+Subroutine traits are applied via the `Traits` attribute. Here is a hypothetical example of a subroutine that can be used as a subcommand with a custom name, and can accept two of its arguments from the command line:
+
+    sub doit :Args(Str first, &File second, :(third)=) 
+             :Traits(Subcommand) 
+             :SubcommandName(dothis)
+             :SubcommandOpt(:f(first), :s(second))
+
+Ordinary functions
+------------------
+
+A similar interface can be used for ordinary functions too:
+
+    use MooseX::Params::Interface::Attributes::Module;
+
+    sub doit :Args(first, second, third) :Export(:DEFAULT)
+
+See http://search.cpan.org/dist/Perl6-Export-Attrs/ for export signature details.
