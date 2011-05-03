@@ -1,16 +1,17 @@
 package MooseX::Params::Interface::Attributes;
 
+# ABSTRACT: Subroutine signature declaration via attributes
+
 use strict;
 use warnings;
 use 5.010;
 use Attribute::Handlers;
-use Devel::Dwarn;
 use Package::Stash;
 use MooseX::Params::Util::Parameter;
 use MooseX::Params::Meta::Method;
 use Moose::Meta::Class;
 
-sub import 
+sub import
 {
     my $inheritor = caller;
 
@@ -34,10 +35,10 @@ sub Args :ATTR(CODE,RAWDATA)
 
     my %parameters = MooseX::Params::Util::Parameter::inflate_parameters(
         $package,
-        map { $_->{name} => $_ } 
+        map { $_->{name} => $_ }
         MooseX::Params::Util::Parameter::parse_params_attribute($data)
     );
-    
+
     my $coderef = \&$symbol;
     my $wrapped_coderef = MooseX::Params::Util::Parameter::wrap($coderef, $package, \%parameters);
 

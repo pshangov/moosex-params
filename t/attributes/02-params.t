@@ -20,10 +20,10 @@ use Test::Most;
         => from 'Int'
         => via { [ $_ ] };
 
-    sub test_transform 
+    sub test_transform
         :Args(&ArrayRefOfInt first, ArrayRefOfInt second, ArrayRefOfInt third = _build_param_third)
-    { 
-        @_{qw(first second third)} 
+    {
+        @_{qw(first second third)}
     }
 
     sub _build_param_third { [42] }

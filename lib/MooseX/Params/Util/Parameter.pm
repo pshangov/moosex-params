@@ -236,24 +236,24 @@ sub parse_params_attribute
         # NAME
         (
              ( (?<named>:) (?<init_arg>\w*) \( (?<name>\w+) \) )
-            |( (?<named>:)?                    (?<init_arg>(?<name>\w+)) )    
+            |( (?<named>:)?                    (?<init_arg>(?<name>\w+)) )
         )
-        
+
         # REQUIRED OR OPTIONAL
         (?<required>[!?])? \s*
-        
+
         # DEFAULT VALUE
-        ( 
+        (
             (?<default>=)\s*(
                   (?<number> \d+ )
                 | ( (?<code>\w+) (\(\))? )
                 | ( (?<delimiter>["']) (?<string>.*) \g{delimiter} )
-             )? 
+             )?
         )?
 
     $/x;
 
-    
+
     foreach my $param ($csv_parser->fields)
     {
         $param =~ s/^\s*//;
@@ -261,7 +261,7 @@ sub parse_params_attribute
 
         if ($param =~ $format)
         {
-            my %options = 
+            my %options =
             (
                 name     => $+{name},
                 init_arg => $+{init_arg} eq '' ? undef : $+{init_arg},
@@ -271,7 +271,7 @@ sub parse_params_attribute
                 isa      => defined $+{type} ? $+{type} : undef,
                 coerce   => $+{coerce} ? 1 : 0,
                 default  => defined $+{number} ? $+{number} : $+{string},
-                builder  => ( defined $+{default} and not defined $+{number} and not defined $+{string} ) 
+                builder  => ( defined $+{default} and not defined $+{number} and not defined $+{string} )
                                 ? ( defined $+{code} ? $+{code} : "_build_param_$+{name}" ) : undef,
                 lazy     => ( defined $+{default} and not defined $+{number} and not defined $+{string} ) ? 1 : 0,
             );

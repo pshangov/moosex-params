@@ -239,6 +239,16 @@ no Moose;
 
     method 'load_user' ...
 
+    # attributes based interface
+
+    use MooseX::Params::Interface::Attributes
+
+    sub login :Args(Str username, Str password)
+    {
+        my $user = $self->load_user($_{username});
+        $_{password} eq $user->password ? 1 : 0;
+    }
+
 =head1 DESCRIPTION
 
 This modules puts forward several proposals to evolve perl's method declaration and parameter processing syntax. For the original rationale see L<http://mechanicalrevolution.com/blog/parameter_apocalypse.html>.

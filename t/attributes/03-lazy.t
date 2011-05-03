@@ -15,28 +15,28 @@ use Test::Most;
         default => 'Why?',
     );
 
-    sub test :Args(Int answer=) { 
-        $_{answer} 
-    }
-    
-    sub selfish :Args(Str statement=) { 
-        $_{statement} 
-    }
-    
-    sub parametric :Args(Int answer=, Str statement = _build_my_statement) { 
-        $_{statement} 
+    sub test :Args(Int answer=) {
+        $_{answer}
     }
 
-    sub _build_param_answer { 
-        42 
+    sub selfish :Args(Str statement=) {
+        $_{statement}
     }
-    
-    sub _build_param_statement { 
-        "The question is '" . $self->question . "'" 
+
+    sub parametric :Args(Int answer=, Str statement = _build_my_statement) {
+        $_{statement}
     }
-    
-    sub _build_my_statement { 
-        "The answer is '$_{answer}'" 
+
+    sub _build_param_answer {
+        42
+    }
+
+    sub _build_param_statement {
+        "The question is '" . $self->question . "'"
+    }
+
+    sub _build_my_statement {
+        "The answer is '$_{answer}'"
     }
 
     no MooseX::Params;

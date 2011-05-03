@@ -9,12 +9,12 @@ use Test::Most;
     use Moose;
     use MooseX::Params::Interface::Attributes;
 
-    sub name :Args(Str :first, Str :last) { 
-        "$_{first} $_{last}" 
+    sub name :Args(Str :first, Str :last) {
+        "$_{first} $_{last}"
     }
 
     sub title :Args(Str name, Str :title) {
-        $_{title} ? "$_{title} $_{name}" : $_{name} 
+        $_{title} ? "$_{title} $_{name}" : $_{name}
     }
 }
 
