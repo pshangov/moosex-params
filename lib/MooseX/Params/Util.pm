@@ -1,4 +1,4 @@
-package MooseX::Params::Util::Parameter;
+package MooseX::Params::Util;
 
 # ABSTRACT: Parameter processing utilities
 
@@ -6,30 +6,19 @@ use strict;
 use warnings;
 use 5.10.0;
 use Moose::Util::TypeConstraints qw(find_type_constraint);
-use Try::Tiny qw(try catch);
-use List::Util qw(max);
-use Scalar::Util qw(isweak);
+use Try::Tiny                    qw(try catch);
+use List::Util                   qw(max);
+use Scalar::Util                 qw(isweak);
+use Perl6::Caller                qw(caller);
+use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
 use Class::MOP::Class;
 use Package::Stash;
-use Perl6::Caller;
-use B::Hooks::EndOfScope qw(on_scope_end); # magic fails without this, have to find out why ...
 use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
 
-sub check_required
-{
-    my $param = shift;
-
-    my $has_default = defined ($param->default) or $param->builder;
-    my $is_required = $param->required;
-
-    if ($is_required and !$has_default)
-    {
-        Carp::croak "Parameter " . $param->name . " is required";
-    }
-}
-
+# DESCRIPTION: Build a parameter from either a default value or a builder
+# USED BY:     MooseX::Params::Util::process
 sub build
 {
     my ($param, $stash) = @_;
@@ -66,68 +55,74 @@ sub build
     return $value;
 }
 
-sub wrap
+# DESCRIPTION: Localize %_ around a method
+# USED BY:     MooseX::Params::Args
+sub wrap_method
 {
-    my ($coderef, $package_name, $parameters, $key, $prototype) = @_;
+    my ($coderef, $package, $parameters) = @_;
 
-    my $wizard = MooseX::Params::Magic::Wizard->new;
-
-    my $wrapped = sub
+    return sub
     {
-        # localize $self
-        my $self = $_[0];
-        no strict 'refs';
-        local *{$package_name.'::self'} = $key ? $self : \$self;
-        use strict 'refs';
+        local %_ = process(@_);
 
-        # localize and enchant %_
-        local %_ = $key ? @_[1 .. $#_] : process(@_);
+        my $wizard = MooseX::Params::Magic::Wizard->new;
+
         Variable::Magic::cast(%_, $wizard,
             parameters => $parameters,
-            self       => \$self,       # needed to pass as first argument to parameter builders
-            wrapper    => \&wrap,
+            self       => $_{self},       # needed to pass as first argument to parameter builders
+            wrapper    => \&wrap_param_builder,
+            package    => $package,
+        );
+
+        return $coderef->(@_);
+    };
+}
+
+# DESCRIPTION: Localize %_ around a parameter builder
+# USED BY:     MooseX::Params::Wizard::fetch
+sub wrap_param_builder
+{
+    my ($coderef, $package_name, $parameters, $key) = @_;
+
+    return sub
+    {
+        local %_ = @_[1 .. $#_];
+
+        my $wizard = MooseX::Params::Magic::Wizard->new;
+        
+        Variable::Magic::cast(%_, $wizard,
+            parameters => $parameters,
+            self       => \$_{self},       # needed to pass as first argument to parameter builders
+            wrapper    => \&wrap_param_builder,
             package    => $package_name,
         );
 
-        # execute for a parameter builder
-        if ($key)
-        {
-            my $value = $coderef->($self, %_);
-            $value = MooseX::Params::Util::Parameter::validate($parameters->{$key}, $value);
-            return %_, $key => $value;
-        }
-        # execute for a method
-        else
-        {
-            return $coderef->(@_);
-        }
+        my $value = validate($parameters->{$key}, $coderef->($_{self}, %_));
+        return %_, $key => $value;
     };
-
-    set_prototype($wrapped, $prototype) if $prototype;
-
-    return $wrapped;
 }
 
+# DESCRIPTION: Get the parameters passed to a method, pair them with parameter definitions,
+#              build, coerce, validate and return them as a hash
+# USED BY:     MooseX::Params::Util::wrap_method
+#              MooseX::Params::Util::wrap_param_builder
 sub process
 {
     my @parameters = @_;
-    my $last_index = $#parameters;
 
+    # get parameter definitions from meta class
     my $frame = 1;
     my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
-    my $stash = Package::Stash->new($package_name);
-
     my $meta = Class::MOP::Class->initialize($package_name);
     my $method = $meta->get_method($method_name);
-
     my @parameter_objects = $method->all_parameters if $method->has_parameters;
-
     return unless @parameter_objects;
 
-    my $offset = $method->index_offset;
+    # separate named from positional parameters
+    my $last_index = $#parameters;
 
     my $last_positional_index = max
-        map  { $_->index + $offset }
+        map  { $_->index }
         grep { $_->type eq 'positional' }
         @parameter_objects;
 
@@ -135,17 +130,26 @@ sub process
 
     my %named = @parameters[ $last_positional_index .. $last_index ];
 
+    # start processing 
     my %return_values;
+
+    my $stash = Package::Stash->new($package_name);
 
     foreach my $param (@parameter_objects)
     {
+        # $is_set - has a value been passed for this parameter
+        # $is_required - is the parameter required
+        # $is_lazy - should we build the value now or on first use
+        # $has_default - does the parameter have a default value or a builder
+        # $original_value - the value passed for this parameter
+        # $value - the value to be returned for this parameter, after any coercions
+
         my ( $is_set, $original_value );
 
         if ( $param->type eq 'positional' )
         {
-            my $index = $param->index + $offset;
-            $is_set = $index > $last_index ? 0 : 1;
-            $original_value = $parameters[$index] if $is_set;
+            $is_set = $param->index > $last_index ? 0 : 1;
+            $original_value = $parameters[$param->index] if $is_set;
         }
         else
         {
@@ -162,13 +166,13 @@ sub process
         # if required but not set, attempt to build the value
         if ( !$is_set and !$is_lazy and $is_required )
         {
-            MooseX::Params::Util::Parameter::check_required($param);
-            $value = MooseX::Params::Util::Parameter::build($param, $stash);
+            Carp::croak ("Parameter " . $param->name . " is required") unless $has_default;
+            $value = MooseX::Params::Util::build($param, $stash);
         }
         # if not required and not set, but not lazy either, check for a default
         elsif ( !$is_set and !$is_required and !$is_lazy and $has_default )
         {
-            $value = MooseX::Params::Util::Parameter::build($param, $stash);
+            $value = MooseX::Params::Util::build($param, $stash);
         }
         # lazy parameters are built later
         elsif ( !$is_set and $is_lazy)
@@ -180,10 +184,11 @@ sub process
             $value = $original_value;
         }
 
-        $value = MooseX::Params::Util::Parameter::validate($param, $value);
+        $value = MooseX::Params::Util::validate($param, $value);
 
         $return_values{$param->name} = $value;
-
+        
+        #FIXME
         if ($param->weak_ref and !isweak($value))
         {
             #weaken($value);
@@ -194,13 +199,15 @@ sub process
     return %return_values;
 }
 
-
+# DESCRIPTION: Given a parameter specification and a value, validate and coerce the value
+# USED BY:     MooseX::Params::Util::process
 sub validate
 {
     my ($param, $value) = @_;
 
     if ( $param->constraint )
     {
+        # fetch type definition
         my $constraint = find_type_constraint($param->constraint)
             or Carp::croak("Could not find definition of type '" . $param->constraint . "'");
 
@@ -210,18 +217,33 @@ sub validate
             $value = $constraint->assert_coerce($value);
         }
 
+        # validate
         $constraint->assert_valid($value);
     }
 
     return $value;
 }
 
-sub parse_params_attribute
+sub parse_attribute
 {
     my $string = shift;
     my @params;
 
+    # join lines
     $string =~ s/\R//g;
+
+    if ($string =~ s/^\s*(\w+)://)
+    {
+        my $invocant = $1;
+
+        push @params, {
+            name     => $invocant,
+            init_arg => $invocant,
+            required => 1,
+            type     => 'positional',
+            #TODO isa => ,
+        };
+    }
 
     my $csv_parser = Text::CSV_XS->new({ allow_loose_quotes => 1 });
     $csv_parser->parse($string) or Carp::croak("Cannot parse param specs");
@@ -229,6 +251,9 @@ sub parse_params_attribute
     my $format = qr/^
         # TYPE AND COERCION
         ( (?<coerce>\&)? (?<type> [\w\:\[\]]+) \s+ )?
+
+        # LAZY_BUILD
+        (?<default>=)?
 
         # SLURPY
         (?<slurpy>\*)?
@@ -287,48 +312,33 @@ sub parse_params_attribute
     return @params;
 }
 
+# TODO:        Merge with process_attribute
+# DESCRIPTION: Given a parameter specification attribute as a string,
+#              inflate into a list of MooseX::Param::Meta::Parameter objects
+# USED BY:     MooseX::Params::Args
 sub inflate_parameters
 {
-    my $package = shift;
-    my @params = @_;
+    my ($package, $data) = @_;
+
+    my @parameters = parse_attribute($data);
     my $position = 0;
     my @inflated_parameters;
 
-    for ( my $i = 0; $i <= $#params; $i++ )
+    foreach my $param (@parameters)
     {
-        my $current = $params[$i];
-        my $next = $i < $#params ? $params[$i+1] : undef;
-        my $parameter;
+        my $parameter_object = MooseX::Params::Meta::Parameter->new(
+            index   => $position,
+            package => $package,
+            %$param,
+        );
 
-        if (ref $next)
-        # next value is a parameter specifiction
-        {
-            $parameter = MooseX::Params::Meta::Parameter->new(
-                type    => 'positional',
-                index   => $position,
-                name    => $current,
-                package => $package,
-                %$next,
-            );
-            $i++;
-        }
-        else
-        {
-            $parameter = MooseX::Params::Meta::Parameter->new(
-                type    => 'positional',
-                index   => $position,
-                name    => $current,
-                package => $package,
-            );
-        }
-
-        push @inflated_parameters, $parameter;
+        push @inflated_parameters, $parameter_object;
         $position++;
     }
 
     my %inflated_parameters = map { $_->name => $_ } @inflated_parameters;
 
-    return %inflated_parameters;
+    return \%inflated_parameters;
 }
 
 1;

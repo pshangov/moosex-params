@@ -7,7 +7,7 @@ use Test::Most;
     package TestExecute;
 
     use Moose;
-    use MooseX::Params::Interface::Attributes;
+    use MooseX::Params;
 
     has 'question' => (
         is      => 'ro',
@@ -15,15 +15,15 @@ use Test::Most;
         default => 'Why?',
     );
 
-    sub test :Args(Int answer=) {
+    sub test :Args(self: Int answer=) {
         $_{answer}
     }
 
-    sub selfish :Args(Str statement=) {
+    sub selfish :Args(self: Str =statement) {
         $_{statement}
     }
 
-    sub parametric :Args(Int answer=, Str statement = _build_my_statement) {
+    sub parametric :Args(self: Int =answer, Str statement = _build_my_statement) {
         $_{statement}
     }
 
@@ -32,7 +32,7 @@ use Test::Most;
     }
 
     sub _build_param_statement {
-        "The question is '" . $self->question . "'"
+        "The question is '" . $_{self}->question . "'"
     }
 
     sub _build_my_statement {

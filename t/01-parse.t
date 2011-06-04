@@ -2,9 +2,10 @@ use strict;
 use warnings;
 
 use Test::Most;
-use MooseX::Params::Util::Parameter;
+use MooseX::Params::Util;
 
-my @specs = MooseX::Params::Util::Parameter::parse_params_attribute(q{
+my @specs = MooseX::Params::Util::parse_attribute(q{
+    self:
     Str *test,
     &ArrayRef[Int] number?,
     :simple,
@@ -14,9 +15,16 @@ my @specs = MooseX::Params::Util::Parameter::parse_params_attribute(q{
     :(calc)=
 });
 
-is(@specs, 7, "number of parameters");
+is(@specs, 8, "number of parameters");
 
 my @expected = (
+    # self:
+    {
+        name     => 'self',
+        init_arg => 'self',
+        required => 1,
+        type     => 'positional',
+    },
     # Str *test
     {
         name     => "test",

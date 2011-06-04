@@ -7,13 +7,13 @@ use Test::Most;
     package TestExecute;
 
     use Moose;
-    use MooseX::Params::Interface::Attributes;
+    use MooseX::Params;
 
-    sub name :Args(Str :first, Str :last) {
+    sub name :Args(self: Str :first, Str :last) {
         "$_{first} $_{last}"
     }
 
-    sub title :Args(Str name, Str :title) {
+    sub title :Args(self: Str name, Str :title) {
         $_{title} ? "$_{title} $_{name}" : $_{name}
     }
 }
