@@ -7,7 +7,7 @@ use warnings;
 use 5.10.0;
 use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Try::Tiny                    qw(try catch);
-use List::Util                   qw(max);
+use List::Util                   qw(max first);
 use Scalar::Util                 qw(isweak);
 use Perl6::Caller                qw(caller);
 use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
@@ -16,6 +16,8 @@ use Package::Stash;
 use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
+
+use Data::Printer;
 
 # DESCRIPTION: Build a parameter from either a default value or a builder
 # USED BY:     MooseX::Params::Util::process
@@ -126,9 +128,14 @@ sub process
         grep { $_->type eq 'positional' }
         @parameter_objects;
 
-    $last_positional_index++;
+    my $last_positional_is_slurpy = 
+        first { $_->index == $last_positional_index and $_->slurpy }
+        @parameter_objects;
 
-    my %named = @parameters[ $last_positional_index .. $last_index ];
+    my $first_named_index = $last_positional_index + 1;
+
+    my %named = @parameters[ $first_named_index .. $last_index ] 
+        unless $last_positional_is_slurpy;
 
     # start processing 
     my %return_values;
@@ -149,12 +156,32 @@ sub process
         if ( $param->type eq 'positional' )
         {
             $is_set = $param->index > $last_index ? 0 : 1;
-            $original_value = $parameters[$param->index] if $is_set;
+
+            if ($is_set)
+            {
+                if ($last_positional_is_slurpy and $param->index == $last_positional_index)
+                {
+                    my @slurpy_values = @parameters[$last_positional_index .. $last_index];
+                    $original_value = \@slurpy_values;
+                }
+                else
+                {
+                    $original_value = $parameters[$param->index];
+                }
+            }
         }
         else
         {
-            $is_set = exists $named{$param->name};
-            $original_value = $named{$param->name} if $is_set;
+            if ($param->init_arg)
+            {
+                $is_set = exists $named{$param->init_arg};
+                $original_value = $named{$param->init_arg} if $is_set;
+            }
+            else
+            {
+                $is_set = exists $named{$param->name};
+                $original_value = $named{$param->name} if $is_set;
+            }
         }
 
         my $is_required = $param->required;

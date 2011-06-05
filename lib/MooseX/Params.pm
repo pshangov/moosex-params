@@ -38,4 +38,8 @@ sub Args :ATTR(CODE,RAWDATA)
     Moose::Meta::Class->initialize($package)->add_method($name, $method);
 }
 
+sub BuildArgs :ATTR(CODE,RAWDATA) { return }
+
+sub CheckArgs :ATTR(CODE,RAWDATA) { return }
+
 1;
