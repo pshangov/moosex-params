@@ -11,6 +11,7 @@ use List::Util                   qw(max first);
 use Scalar::Util                 qw(isweak);
 use Perl6::Caller                qw(caller);
 use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
+use attributes                   qw();
 use Class::MOP::Class;
 use Package::Stash;
 use Text::CSV_XS;
@@ -119,6 +120,12 @@ sub process
     my $method = $meta->get_method($method_name);
     my @parameter_objects = $method->all_parameters if $method->has_parameters;
     return unless @parameter_objects;
+    
+    if ($method->buildargs)
+    {
+        my $buildargs = $meta->get_method($method->buildargs);
+        @parameters = $buildargs->body->(@parameters);
+    }
 
     # separate named from positional parameters
     my $last_index = $#parameters;
@@ -221,6 +228,13 @@ sub process
             #weaken($value);
             #weaken($return_values{$param->name});
         }
+    }
+
+    if ($method->checkargs)
+    {
+        my $checkargs = $meta->get_method($method->checkargs)->body;
+        local %_ = %return_values;
+        $checkargs->(%return_values);
     }
 
     return %return_values;

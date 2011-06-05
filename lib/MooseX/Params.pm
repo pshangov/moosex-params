@@ -9,6 +9,7 @@ use Attribute::Handlers;
 use MooseX::Params::Util;
 use MooseX::Params::Meta::Method;
 use Moose::Meta::Class;
+use Data::Printer;
 
 sub import
 {
@@ -38,8 +39,24 @@ sub Args :ATTR(CODE,RAWDATA)
     Moose::Meta::Class->initialize($package)->add_method($name, $method);
 }
 
-sub BuildArgs :ATTR(CODE,RAWDATA) { return }
+sub BuildArgs :ATTR(CODE,RAWDATA) 
+{
+    my ($package, $symbol, $referent, $attr, $data) = @_;
+    my ($name)  = $$symbol =~ /.+::(\w+)$/;    
+    $data = "_buildargs_$name" unless $data;
 
-sub CheckArgs :ATTR(CODE,RAWDATA) { return }
+    my $method = Moose::Meta::Class->initialize($package)->get_method($name);
+    $method->buildargs($data);
+}
+
+sub CheckArgs :ATTR(CODE,RAWDATA) 
+{
+    my ($package, $symbol, $referent, $attr, $data) = @_;
+    my ($name)  = $$symbol =~ /.+::(\w+)$/;    
+    $data = "_checkargs_$name" unless $data;
+
+    my $method = Moose::Meta::Class->initialize($package)->get_method($name);
+    $method->checkargs($data);
+} 
 
 1;

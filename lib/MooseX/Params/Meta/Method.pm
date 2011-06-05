@@ -31,6 +31,18 @@ has 'index_offset' =>
     default => 1,
 );
 
+has 'buildargs' =>
+(
+    is  => 'rw',
+    isa => 'Str',
+);
+
+has 'checkargs' =>
+(
+    is  => 'rw',
+    isa => 'Str',
+);
+
 has '_delayed' =>
 (
     is       => 'ro',
