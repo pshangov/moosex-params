@@ -34,7 +34,7 @@ sub fetch
     # this check should not be necessary
     if ($builder)
     {
-        my %updated = $wrapped->($data->self, %$ref);
+        my %updated = $wrapped->(%$ref);
         foreach my $updated_key ( keys %updated )
         {
             $ref->{$updated_key} = $updated{$updated_key}

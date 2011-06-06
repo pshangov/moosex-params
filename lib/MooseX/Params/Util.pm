@@ -72,7 +72,6 @@ sub wrap_method
 
         Variable::Magic::cast(%_, $wizard,
             parameters => $parameters,
-            self       => $_{self},       # needed to pass as first argument to parameter builders
             wrapper    => \&wrap_param_builder,
             package    => $package,
         );
@@ -89,26 +88,46 @@ sub wrap_param_builder
 
     return sub
     {
-        local %_ = @_[1 .. $#_];
+        local %_ = @_;
 
         my $wizard = MooseX::Params::Magic::Wizard->new;
         
         Variable::Magic::cast(%_, $wizard,
             parameters => $parameters,
-            self       => \$_{self},       # needed to pass as first argument to parameter builders
             wrapper    => \&wrap_param_builder,
             package    => $package_name,
         );
 
-        my $value = validate($parameters->{$key}, $coderef->($_{self}, %_));
+        my $value = validate($parameters->{$key}, $coderef->(%_));
         return %_, $key => $value;
+    };
+}
+
+# DESCRIPTION: Localize %_ around a checkargs sub
+# USED BY:     MooseX::Params::Wizard::process
+sub wrap_checkargs
+{
+    my ($coderef, $package_name, $parameters) = @_;
+
+    return sub
+    {
+        local %_ = @_;
+
+        my $wizard = MooseX::Params::Magic::Wizard->new;
+        
+        Variable::Magic::cast(%_, $wizard,
+            parameters => $parameters,
+            wrapper    => \&wrap_param_builder,
+            package    => $package_name,
+        );
+
+        $coderef->(%_);
     };
 }
 
 # DESCRIPTION: Get the parameters passed to a method, pair them with parameter definitions,
 #              build, coerce, validate and return them as a hash
 # USED BY:     MooseX::Params::Util::wrap_method
-#              MooseX::Params::Util::wrap_param_builder
 sub process
 {
     my @parameters = @_;
@@ -201,12 +220,12 @@ sub process
         if ( !$is_set and !$is_lazy and $is_required )
         {
             Carp::croak ("Parameter " . $param->name . " is required") unless $has_default;
-            $value = MooseX::Params::Util::build($param, $stash);
+            $value = build($param, $stash);
         }
         # if not required and not set, but not lazy either, check for a default
         elsif ( !$is_set and !$is_required and !$is_lazy and $has_default )
         {
-            $value = MooseX::Params::Util::build($param, $stash);
+            $value = build($param, $stash);
         }
         # lazy parameters are built later
         elsif ( !$is_set and $is_lazy)
@@ -218,7 +237,7 @@ sub process
             $value = $original_value;
         }
 
-        $value = MooseX::Params::Util::validate($param, $value);
+        $value = validate($param, $value);
 
         $return_values{$param->name} = $value;
         
@@ -233,8 +252,8 @@ sub process
     if ($method->checkargs)
     {
         my $checkargs = $meta->get_method($method->checkargs)->body;
-        local %_ = %return_values;
-        $checkargs->(%return_values);
+        my $wrapped = wrap_checkargs($checkargs, $package_name, $method->parameters);
+        $wrapped->(%return_values);
     }
 
     return %return_values;
