@@ -6,7 +6,7 @@ use 5.010;
 use strict;
 use warnings;
 use Carp ();
-use MooseX::Params::Util::Parameter;
+use MooseX::Params::Util;
 use MooseX::Params::Magic::Data;
 use parent 'MooseX::Params::Magic::Base';
 
@@ -49,7 +49,7 @@ sub fetch
 
 sub store
 {
-    Carp::croak "Don't touch me!" if caller ne __PACKAGE__;
+    Carp::croak "Attempt to modify read-only parameter" if caller ne __PACKAGE__;
 }
 
 1;

@@ -78,7 +78,6 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
 
     # say add(2, 3);     # 5
     # say add(2);        # error
-    # say add(2, 3, 4);  # error
 
     # @_ still works: you can ignore %_ if you want to
     sub add2 :Args(Int first, Int second) {
@@ -106,8 +105,9 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
     # slurpy arguments consume the remainder of @_
     sub sum :Args(ArrayRef[Int] *values) :Export(:DEFAULT) {
 	  my $sum = 0;
+      my @values = @{$_{values}};
 	  
-      foreach my $value (@{$_{values}})
+      foreach my $value (@values)
       {
 	    $sum += $value;
 	  }
@@ -120,11 +120,10 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
     # 'all' is optional:
     # if not present search the text within a file and return 1 if found, 0 if not
     # if present search the text and return number of lines in which text is found
-    sub search2 Args:(text, file, all?) {
-      open ( my $fh, $_{file}, '>' ) or die $!;
+    sub search :Args(text, file, all?) {
 	  my $cnt = 0;
 	  
-      while (my $line = <$fh>)
+      while (my $line = $_{fh}->getline)
       {
 	    if ( index($line, $_{text}) > -1 )
         {
@@ -232,7 +231,7 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
       if (@_ == 2) {
         my ($input, $params) = @_;
         my $output = $input;
-        substr($output, 0, -4, "html");
+        substr($output, -4, 4, "html");
         return $input, $output, $params;
       } else {
         return @_;
@@ -270,5 +269,230 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
       }
   }
 
+=head1 DESCRIPTION
 
+This modules provides an attributes-based interface for parameter processing in Perl 5. For the original rationale see L<http://mechanicalrevolution.com/blog/parameter_apocalypse.html>.
 
+The proposed interface is based on three cornerstone propositions:
+
+=over 4
+
+=item *
+
+Parameters are first-class entities that deserve their own meta protocol. A common meta protocol may be used by different implementations (e.g. this library, L<MooseX::Params::Validate>, L<MooseX::Method::Sigantures>) and allow them to coexist better. It is also the necessary foundation for more advanced features such as multimethods and extended role validation.
+
+=item *
+
+Parameters should benefit from the same power and flexibility that L<Moose> attributes have. This module implements most of this functionality, including laziness.
+
+=item *
+
+The global variable C<%_> is used as a placeholder for processed parameters. It is considered by the author of this module as an intuitive alternative to manual unpacking of C<@_> while staying within the limits of traditional Perl syntax.
+
+=back
+
+=head1 USE WITH CARE
+
+This is still an experimental module and is subject to backwards incompatible changes. It is barely tested and most certainly has serious lurking bugs, has a lot of room for performance optimizations, and its error reporting could be vastly improved.
+
+=head1 BACKWARDS INCOMPATIBLE CHANGES
+
+Version 0.005 removes the interface based on the C<method> keyword, and retains only the attributes-based interface. Also, C<$self> is no longer localized inside methods, you must use C<$_{self}> instead.
+
+=head1 SIGNATURE SYNTAX
+
+Signatures are declared with the C<:Args> attribute. All parsed parameters are made available inside your subroutine within the special C<%_> hash.
+
+=head2 Parameter names
+
+Parameter names can by any valid perl identifiers, and they are separated by commas.
+
+  sub rank :Args(first, second, third) {
+    say "$_{first} is first, $_{second} is second, and $_{third} is third";
+  }
+
+=head2 Invocant
+
+Method signatures can specify their invocant as the first parameter, followed by a colon:
+
+  sub rank :Args(self: first, second, third) {
+    my $competition = $_{self}->competition;
+    ...
+  }
+
+=head2 Type constraints
+
+Moose type constraints may be used for validation.
+
+  sub rank :Args(Str first, Str second, Str third) { ... }
+
+An ampersand before a type enables coercion for this type.
+  
+  subtype 'Name' ...;
+
+  coerce 'Name', from 'Str', via { ... };
+  
+  sub rank :Args(&Name first, &Name second, &Name third) { ... }
+
+=head2 Positional and named parametrs
+
+Parameters are by default positional.
+
+  sub rank :Args(first, second, third) { ... }
+  # rank('Peter', 'George', 'John')
+
+Named parameters are prefixed by a colon.
+
+  sub rank :Args(:first, :second, :third) { ... }
+  # rank( first => 'Peter', second => 'George', third => 'John')
+
+Named parameters may be passed by one name and accessed by another.
+
+  sub rank :Args(:gold(first), :silver(second), :bronze(third)) {
+    say "$_{first} is first, $_{second} is second, and $_{third} is third";
+  }
+  # rank( gold => 'Peter', silver => 'George', bronze => 'John')
+
+Positional and named parameters may be mixed, but positional parameters must come first.
+
+  sub rank :Args(first, :second, :third) {
+    say "$_{first} is first, $_{second} is second, and $_{third} is third";
+  }
+  # rank( 'Peter', second => 'George', third => 'John')
+
+=head2 Required parameters
+
+An exclamation mark (C<!>)after the name denotes a required parameter, and a question mark (C<?>)denotes an optional parameter.
+
+  sub rank :Args(first!, second?, third?) { ... }
+
+Positional parameters are by default required, and named parameters are by default optional.
+
+=head2 Slurpy parameters
+
+A parameter prefixed by an asterix (C<*>) is slurpy, i.e. it consumes the remainder of the argument list. Slurpy parameters must come last in the signature.
+
+  sub rank :Args(ArrayRef *winners) {
+    say "$_{winners}[0] is first, $_{winners}[1] is second, and $_{winners}[2] is third";
+  }
+
+=head2 Default values
+
+A parameter may be given a simple default value, which can be either a quoted string or an unsigned positive integer.
+
+  sub rank :Args(first = 'Peter', second = 'George', third = 'John') { ... }
+
+You may use either single or double quotes to quote a string, but they will always be interpreted as if single quotes were used.
+
+=head2 Builders
+
+Where a default value is not sufficient, parameters may specify builders instead. A builder is a subroutine whose return value will be used as default value for the parameter. 
+
+  sub rank :Args(ArrayRef *winners = calculate_winners) { ... }
+
+  sub calculate_winners { ... }
+
+The name of the builder may be optionally followed by a pair of parenthesis.
+
+  sub rank :Args(ArrayRef *winners = calculate_winners()) { ... }
+
+All builders are executed lazily, i.e. the first time the parameter is accessed. If a parameter name is followed by an equal sign, but neither a default value nor a builder is specified, it is assumed that the parameter has a builder named C<_build_param_${name}>. In this case the equal sign may also be placed before the name of the parameter.
+
+  sub rank :Args(ArrayRef *winners=) { ... }
+  # is equivalent to
+  sub rank :Args(ArrayRef =*winners) { ... }
+  # is equivalent to
+  sub rank :Args(ArrayRef *winners = _build_param_winners) { ... }
+
+  sub _build_param_winners { ... }
+
+Within a parameter builder, you can access all other parameters in the C<%_> hash.
+
+  sub connect :Args(=:dbh, :host, :port, :database) { ... }
+
+  sub _build_param_dbh {
+    return DBI->connect("dbi:mysql:host=$_{host};port=$_{port};database=$_{database}");
+  }
+
+=head1 BUILDARGS AND CHECKARGS
+
+=head1 BuildArgs
+
+The C<BuildArgs> attribute allows you to specify a subroutine that will be used to preprocess your arguments before they are validated against the supplied signature. It can be used as to create poor man's multimethods by coercing different types of arguments to a single signature. It is somewhat similar to what Moose's C<BUILDARGS> does for class constructors. 
+
+  sub rank 
+    :Args(:first :second :third)
+    :BuildArgs(_buildargs_rank)
+  { ... }
+
+  # allow positional parameters as well
+  sub _buildargs_rank {
+    if (@_ == 3) {
+      return first => $_[0], second => $_[1], third => $_[2];
+    } else {
+      return @_;  
+    }
+  }
+
+If C<BuildArgs> is specified without a subroutine name, C<_buildargs_${sub_name}> will be assumed.
+
+  sub rank :Args(...) :BuildArgs { ... }
+  # is equivalent to
+  sub rank :Args(...) :BuildArgs(_buildargs_rank) { ... }
+
+=head1 CheckArgs
+
+The C<CheckArgs> attribute allows you to specify a subroutine that will be used to perform additional validation after the arguments are validated against the supplied signature. It can be used to perform more complex validations that cannot be expressed in a simple signature. It is somewhat similar to what Moose's C<BUILD> does for class constructors. Inside a C<CheckArgs> subroutine you can access the processed parameters in the C<%_> hash.
+
+  sub rank 
+    :Args(:first :second :third)
+    :CheckArgs(_checkargs_rank)
+  { ... }
+
+  # make sure names do not repeat
+  sub _checkargs_rank {
+    if ( 
+      ($_{first}  eq $_{second}) or 
+      ($_{first}  eq $_{third} ) or 
+      ($_{second} eq $_{third} ) 
+    ) { die "One player can only take one place!";  }
+  }
+
+If C<CheckArgs> is specified without a subroutine name, C<_checkargs_${sub_name}> will be assumed.
+
+  sub rank :Args(...) :CheckArgs { ... }
+  # is equivalent to
+  sub rank :Args(...) :CheckArgs(_checkargs_rank) { ... }
+
+=head1 META CLASSES
+
+C<MooseX::Params> provides method and parameter metaroles, please see their sourcecode for details (plain L<Moose>):
+
+=for :list
+* L<MooseX::Params::Meta::Method>
+* L<MooseX::Params::Meta::Parameter>
+
+=head1 TODO
+
+=for :list
+* return value validation (C<Returns> and C<ReturnsScalar>)
+* subroutine traits (C<Does>)
+* better error checking and reporting
+* improved performance
+
+Whether or not these features will be implemented depends mostly on the community response to the proposed API. Currently the best way to contribute to this module would be to provide feedback and commentary - the L<Moose> mailing list will be a good place for this.
+
+=head1 BUGS
+
+Plenty. Some of the known ones are:
+
+=for :list
+* No checking for surplus arguments
+* C<foreach my $value (@{$_{arrayref}})> attempts to modify C<$_{arrayref}> and triggers an exception
+* Incopatible with Perl6::Export::Attrs
+
+=head1 SEE ALSO
+
+=for :list
+* L<MooseX::Params::Validate>
+* L<MooseX::Method::Signatures>

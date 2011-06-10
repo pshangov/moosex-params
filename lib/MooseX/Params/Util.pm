@@ -154,14 +154,21 @@ sub process
         grep { $_->type eq 'positional' }
         @parameter_objects;
 
+    $last_positional_index = -1 unless defined $last_positional_index;
+
     my $last_positional_is_slurpy = 
         first { $_->index == $last_positional_index and $_->slurpy }
         @parameter_objects;
 
     my $first_named_index = $last_positional_index + 1;
 
-    my %named = @parameters[ $first_named_index .. $last_index ] 
-        unless $last_positional_is_slurpy;
+    my %named;
+    {
+        no warnings 'misc';
+        # disable 'Odd number of elements in hash assignment' warning
+        %named = @parameters[ $first_named_index .. $last_index ] 
+            unless $last_positional_is_slurpy;
+    }
 
     # start processing 
     my %return_values;
