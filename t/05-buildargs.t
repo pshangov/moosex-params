@@ -9,18 +9,18 @@ use Test::Most;
     use Moose;
     use MooseX::Params;
 
-    sub test 
-        :Args(self: Int first) 
+    sub test
+        :Args(self: Int first)
         :BuildArgs(_buildargs_test)
     { $_{first} }
-    
+
     sub _buildargs_test { shift, 42 }
 
-    sub test_fail 
-        :Args(self: Int first) 
+    sub test_fail
+        :Args(self: Int first)
         :CheckArgs
     { $_{first} }
-    
+
     sub _checkargs_test_fail { die unless $_{first} > 30 }
 }
 

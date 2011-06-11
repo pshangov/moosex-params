@@ -11,12 +11,12 @@ use Test::Most;
     use MooseX::Params;
 
     sub test_isa :Args(self: Int first) { $_{first} }
-    
+
     sub test_required :Args(self: first) { $_{first} }
-    
-    sub test_slurpy :Args(self: Str join, ArrayRef[Int] *all) 
+
+    sub test_slurpy :Args(self: Str join, ArrayRef[Int] *all)
     {
-        join $_{join}, @{$_{all}}  
+        join $_{join}, @{$_{all}}
     }
 
     subtype 'ArrayRefOfInt' => as 'ArrayRef[Int]';

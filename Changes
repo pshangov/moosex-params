@@ -1,5 +1,12 @@
 Revision history for MooseX-Params
 
+0.005   12/06/2011
+        * Removed 'method' keyword interface
+        * Updated documentation and tests
+
+0.004   03/05/2011
+        * Add attributes-based interface
+
 0.003   08/04/2011
         * Add mimimum required version of Package::Stash
 

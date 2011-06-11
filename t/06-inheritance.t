@@ -9,11 +9,11 @@ use Test::Most;
     use Moose;
     use MooseX::Params;
 
-    sub test 
-        :Args(self: Int first) 
+    sub test
+        :Args(self: Int first)
         :BuildArgs(_buildargs_test)
     { $_{first} }
-    
+
     sub _buildargs_test { shift, 42 }
 
     __PACKAGE__->meta->make_immutable;

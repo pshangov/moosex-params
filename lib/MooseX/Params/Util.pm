@@ -91,7 +91,7 @@ sub wrap_param_builder
         local %_ = @_;
 
         my $wizard = MooseX::Params::Magic::Wizard->new;
-        
+
         Variable::Magic::cast(%_, $wizard,
             parameters => $parameters,
             wrapper    => \&wrap_param_builder,
@@ -114,7 +114,7 @@ sub wrap_checkargs
         local %_ = @_;
 
         my $wizard = MooseX::Params::Magic::Wizard->new;
-        
+
         Variable::Magic::cast(%_, $wizard,
             parameters => $parameters,
             wrapper    => \&wrap_param_builder,
@@ -139,7 +139,7 @@ sub process
     my $method = $meta->get_method($method_name);
     my @parameter_objects = $method->all_parameters if $method->has_parameters;
     return unless @parameter_objects;
-    
+
     if ($method->buildargs)
     {
         my $buildargs = $meta->get_method($method->buildargs);
@@ -156,7 +156,7 @@ sub process
 
     $last_positional_index = -1 unless defined $last_positional_index;
 
-    my $last_positional_is_slurpy = 
+    my $last_positional_is_slurpy =
         first { $_->index == $last_positional_index and $_->slurpy }
         @parameter_objects;
 
@@ -166,11 +166,11 @@ sub process
     {
         no warnings 'misc';
         # disable 'Odd number of elements in hash assignment' warning
-        %named = @parameters[ $first_named_index .. $last_index ] 
+        %named = @parameters[ $first_named_index .. $last_index ]
             unless $last_positional_is_slurpy;
     }
 
-    # start processing 
+    # start processing
     my %return_values;
 
     my $stash = Package::Stash->new($package_name);
@@ -247,7 +247,7 @@ sub process
         $value = validate($param, $value);
 
         $return_values{$param->name} = $value;
-        
+
         #FIXME
         if ($param->weak_ref and !isweak($value))
         {

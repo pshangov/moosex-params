@@ -9,7 +9,6 @@ use Attribute::Handlers;
 use MooseX::Params::Util;
 use MooseX::Params::Meta::Method;
 use Moose::Meta::Class;
-use Data::Printer;
 
 sub import
 {
@@ -39,25 +38,25 @@ sub Args :ATTR(CODE,RAWDATA)
     Moose::Meta::Class->initialize($package)->add_method($name, $method);
 }
 
-sub BuildArgs :ATTR(CODE,RAWDATA) 
+sub BuildArgs :ATTR(CODE,RAWDATA)
 {
     my ($package, $symbol, $referent, $attr, $data) = @_;
-    my ($name)  = $$symbol =~ /.+::(\w+)$/;    
+    my ($name)  = $$symbol =~ /.+::(\w+)$/;
     $data = "_buildargs_$name" unless $data;
 
     my $method = Moose::Meta::Class->initialize($package)->get_method($name);
     $method->buildargs($data);
 }
 
-sub CheckArgs :ATTR(CODE,RAWDATA) 
+sub CheckArgs :ATTR(CODE,RAWDATA)
 {
     my ($package, $symbol, $referent, $attr, $data) = @_;
-    my ($name)  = $$symbol =~ /.+::(\w+)$/;    
+    my ($name)  = $$symbol =~ /.+::(\w+)$/;
     $data = "_checkargs_$name" unless $data;
 
     my $method = Moose::Meta::Class->initialize($package)->get_method($name);
     $method->checkargs($data);
-} 
+}
 
 1;
 
@@ -65,127 +64,78 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
 
 =head1 SYNOPSIS
 
-  # in a module
-  package MyModule 
-  {
-    use MooseX::Params;
-
-    # any Moose types may be used for validation
-    # positional arguments are by default required
-    sub add :Args(Int first, Int second) {
-        return $_{first} + $_{second};
-    }
-
-    # say add(2, 3);     # 5
-    # say add(2);        # error
-
-    # @_ still works: you can ignore %_ if you want to
-    sub add2 :Args(Int first, Int second) {
-      my ($first, $second) = @_;
-      return $first + $second;
-    }
-
-    # say add2(2, 3); # 5
-
-    # '&' before a type constraint enables coercion
-    subtype 'HexNum',
-      as 'Str',
-      where { /[a-f0-9]/i };
-
-    coerce 'Int',
-      from 'HexNum',
-      via { hex $_ };
-
-    sub add3 :Args(&Int first, &Int second) {
-      return $_{first} + $_{second};
-    }
-
-    # say add3('A', 'B'); # 21
-
-    # slurpy arguments consume the remainder of @_
-    sub sum :Args(ArrayRef[Int] *values) :Export(:DEFAULT) {
-	  my $sum = 0;
-      my @values = @{$_{values}};
-	  
-      foreach my $value (@values)
-      {
-	    $sum += $value;
-	  }
-	
-      return $sum;
-    }
-
-    # say sum(2, 3, 4, 5); # 14
-    
-    # 'all' is optional:
-    # if not present search the text within a file and return 1 if found, 0 if not
-    # if present search the text and return number of lines in which text is found
-    sub search :Args(text, file, all?) {
-	  my $cnt = 0;
-	  
-      while (my $line = $_{fh}->getline)
-      {
-	    if ( index($line, $_{text}) > -1 )
-        {
-          return 1 if not $_{all};
-		  $cnt++;
-	    }
-	  } 
-
-      return $cnt;
-    }
-
-    # named arguments
-    sub foo :Args(a, :b)
-    {
-      return $_{a} + $_{b} * 2;
-    }
-
-    # say foo( 3, b => 2 ); # 7
-    # say foo(4, 9);        # error
-    # say foo(2);           # error
-    # say foo(2, 3, 4);     # error
-    
-    # parameters are immutable, assign to a variable to edit
-    sub trim :Args(Str string)
-    {
-        my $string = $_{string};
-        $string =~ s/^\s*//;
-        $string =~ s/\s*$//;
-        return $string;
-    }
-   
+  # use Moose types for validation
+  # positional arguments are by default required
+  sub add :Args(Int first, Int second) {
+    return $_{first} + $_{second};
   }
-    
-  # in a class
-  package User
-  {
-    use Moose;
-    use MooseX::Params;
-    use DateTime;
-    
-    extends 'Person';
 
-    has 'password' => (
-      is  => 'rw',
-      isa => 'Str',
-    );
+  say add(2, 3); # 5
+  say add(2);    # error
 
-    has 'last_login' => (
-      is      => 'rw',
-      isa     => 'DateTime',
-    );
+  # @_ still works: you can ignore %_ if you want to
+  sub add2 :Args(Int first, Int second) {
+    my ($first, $second) = @_;
+    return $first + $second;
+  }
 
-    # note the shortcut invocant syntax
-    sub login :Args(self: Str pw)
-    {
-      return 0 if $_{pw} ne $_{self}->password;
+  say add2(2, 3); # 5
 
-      $_{self}->last_login( DateTime->now() );
+  # '&' before a type constraint enables coercion
+  subtype 'HexNum', as 'Str', where { /[a-f0-9]/i };
+  coerce 'Int', from 'HexNum', via { hex $_ };
 
-      return 1;
+  sub add3 :Args(&Int first, &Int second) {
+    return $_{first} + $_{second};
+  }
+
+  say add3('A', 'B'); # 21
+
+  # slurpy arguments consume the remainder of @_
+  sub sum :Args(ArrayRef *values) {
+    my $sum = 0;
+    my @values = @{$_{values}};
+
+    foreach my $value (@values) {
+      $sum += $value;
     }
-  
+    return $sum;
+  }
+
+  say sum(2, 3, 4, 5); # 14
+
+  # 'all' is optional:
+  # if not present search the text within a file and return 1 if found, 0 if not
+  # if present search the text and return number of lines in which text is found
+  sub search :Args(text, fh, all?) {
+    my $cnt = 0;
+
+    while (my $line = $_{fh}->getline) {
+      if ( index($line, $_{text}) > -1 ) {
+        return 1 if not $_{all};
+        $cnt++;
+      }
+    }
+
+    return $cnt;
+  }
+
+  # named arguments
+  sub foo :Args(a, :b) {
+    return $_{a} + $_{b} * 2;
+  }
+
+  # say foo( 3, b => 2 ); # 7
+  # say foo(4, 9);        # error
+  # say foo(2);           # error
+  # say foo(2, 3, 4);     # error
+
+  # parameters are immutable, assign to a variable to edit
+  sub trim :Args(Str string) {
+      my $string = $_{string};
+      $string =~ s/^\s*//;
+      $string =~ s/\s*$//;
+      return $string;
   }
 
   # parameters can have simple defaults
@@ -198,75 +148,90 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
     :height = 170 )
   { ... }
 
-  sub _build_param_color
-  {
+  sub _build_param_color {
       return (qw(red green blue))[ int( rand 3 ) ];
   }
 
   # you can access all other parameters within a builder
-  sub _build_param_size
-  {
+  sub _build_param_size {
       return $_{height} > 200 ? 'large' : 'medium';
   }
 
-  # buildargs
-  
-  package TemplateProcessor 
+  # preprocess @_ with buildargs
+  sub process_template
+    :Args(input, output, params)
+    :BuildArgs(_buildargs_process_template)
   {
-    use MooseX::Params;
-    use Data::Dumper;
+    say "open $_{input}";
+    say "replace " . Dumper $_{params};
+    say "save $_{output}";
+  }
 
-    sub process_template
-      :Args(input, output, params)
-      :BuildArgs(_buildargs_process_template)
-    {
-	  say "open $_{input}";
-	  say "replace " . Dumper $_{params};
-	  say "save $_{output}";
+  # if 'output' is not provided, deduct it from input filename
+  sub _buildargs_process_template {
+    if (@_ == 2) {
+      my ($input, $params) = @_;
+      my $output = $input;
+      substr($output, -4, 4, "html");
+      return $input, $output, $params;
+    } else {
+      return @_;
     }
-    
-    # if 'output' is not provided, deduct it from input filename
-    sub _buildargs_process_template
-    {
-      if (@_ == 2) {
-        my ($input, $params) = @_;
-        my $output = $input;
-        substr($output, -4, 4, "html");
-        return $input, $output, $params;
-      } else {
-        return @_;
-      }
-    }
-
   }
 
   my %data = (
-	fname => "Foo",
-	lname => "Bar",
+    fname => "Foo",
+    lname => "Bar",
   );
 
   process_template("index.tmpl", \%data);
   # open index.tmpl
   # replace {"lname" => "Bar", "fname" => "Foo"}
   # save index.html
-  
+
   process_template("from.tmpl", "to.html", \%data);
   # open from.tmpl
   # replace {"lname" => "Bar", "fname" => "Foo"}
   # save to.html
 
-  # checkargs
+  # additional validation with checkargs
   sub process_person
-      :Args(:first_name!, :last_name!, :country!, :ssn?)
-      :CheckArgs # shortcut for :CheckArgs(_checkargs_${sub_name})
+    :Args(:first_name!, :last_name!, :country!, :ssn?)
+    :CheckArgs # shortcut for :CheckArgs(_checkargs_${subname})
   { ... }
 
-  sub _checkargs_process_person 
-  {
-      if ( $_{country} eq 'USA' ) 
-      {
-          die 'All US residents must have an SSN' unless $_{ssn};
-      }
+  sub _checkargs_process_person {
+    if ( $_{country} eq 'USA' ) {
+      die 'All US residents must have an SSN' unless $_{ssn};
+    }
+  }
+
+  # in a class
+  package User;
+
+  use Moose;
+  use MooseX::Params;
+  use DateTime;
+
+  extends 'Person';
+
+  has 'password' => (
+    is  => 'rw',
+    isa => 'Str',
+  );
+
+  has 'last_login' => (
+    is      => 'rw',
+    isa     => 'DateTime',
+  );
+
+  # note the shortcut invocant syntax
+  sub login :Args(self: Str pw) {
+    return 0 if $_{pw} ne $_{self}->password;
+
+    $_{self}->last_login( DateTime->now() );
+
+    return 1;
   }
 
 =head1 DESCRIPTION
@@ -301,7 +266,7 @@ Version 0.005 removes the interface based on the C<method> keyword, and retains 
 
 =head1 SIGNATURE SYNTAX
 
-Signatures are declared with the C<:Args> attribute. All parsed parameters are made available inside your subroutine within the special C<%_> hash.
+Signatures are declared with the C<:Args> attribute. All parsed parameters are made available inside your subroutine within the special C<%_> hash. All elements of C<%_> are read-only, and an attempt to modify them will throw an exception. An attempt to use a hash element which is not a valid parameter name for this subroutine will also throw an exception. C<@_> is not affected by the use of signagures, so you can still use it to manually unpack arguments if you want to.
 
 =head2 Parameter names
 
@@ -327,11 +292,11 @@ Moose type constraints may be used for validation.
   sub rank :Args(Str first, Str second, Str third) { ... }
 
 An ampersand before a type enables coercion for this type.
-  
+
   subtype 'Name' ...;
 
   coerce 'Name', from 'Str', via { ... };
-  
+
   sub rank :Args(&Name first, &Name second, &Name third) { ... }
 
 =head2 Positional and named parametrs
@@ -362,7 +327,7 @@ Positional and named parameters may be mixed, but positional parameters must com
 
 =head2 Required parameters
 
-An exclamation mark (C<!>)after the name denotes a required parameter, and a question mark (C<?>)denotes an optional parameter.
+An exclamation mark (C<!>) after the name denotes a required parameter, and a question mark (C<?>) denotes an optional parameter.
 
   sub rank :Args(first!, second?, third?) { ... }
 
@@ -378,7 +343,7 @@ A parameter prefixed by an asterix (C<*>) is slurpy, i.e. it consumes the remain
 
 =head2 Default values
 
-A parameter may be given a simple default value, which can be either a quoted string or an unsigned positive integer.
+A parameter may be given a simple default value, which can be either a quoted string or an unsigned integer.
 
   sub rank :Args(first = 'Peter', second = 'George', third = 'John') { ... }
 
@@ -386,7 +351,7 @@ You may use either single or double quotes to quote a string, but they will alwa
 
 =head2 Builders
 
-Where a default value is not sufficient, parameters may specify builders instead. A builder is a subroutine whose return value will be used as default value for the parameter. 
+Where a default value is not sufficient, parameters may specify builders instead. A builder is a subroutine whose return value will be used as default value for the parameter.
 
   sub rank :Args(ArrayRef *winners = calculate_winners) { ... }
 
@@ -418,9 +383,9 @@ Within a parameter builder, you can access all other parameters in the C<%_> has
 
 =head1 BuildArgs
 
-The C<BuildArgs> attribute allows you to specify a subroutine that will be used to preprocess your arguments before they are validated against the supplied signature. It can be used as to create poor man's multimethods by coercing different types of arguments to a single signature. It is somewhat similar to what Moose's C<BUILDARGS> does for class constructors. 
+The C<BuildArgs> attribute allows you to specify a subroutine that will be used to preprocess your arguments before they are validated against the supplied signature. It can be used as to create poor man's multimethods by coercing different types of arguments to a single signature. It is somewhat similar to what Moose's C<BUILDARGS> does for class constructors.
 
-  sub rank 
+  sub rank
     :Args(:first :second :third)
     :BuildArgs(_buildargs_rank)
   { ... }
@@ -430,11 +395,11 @@ The C<BuildArgs> attribute allows you to specify a subroutine that will be used 
     if (@_ == 3) {
       return first => $_[0], second => $_[1], third => $_[2];
     } else {
-      return @_;  
+      return @_;
     }
   }
 
-If C<BuildArgs> is specified without a subroutine name, C<_buildargs_${sub_name}> will be assumed.
+If C<BuildArgs> is specified without a subroutine name, C<_buildargs_${subname}> will be assumed.
 
   sub rank :Args(...) :BuildArgs { ... }
   # is equivalent to
@@ -444,21 +409,21 @@ If C<BuildArgs> is specified without a subroutine name, C<_buildargs_${sub_name}
 
 The C<CheckArgs> attribute allows you to specify a subroutine that will be used to perform additional validation after the arguments are validated against the supplied signature. It can be used to perform more complex validations that cannot be expressed in a simple signature. It is somewhat similar to what Moose's C<BUILD> does for class constructors. Inside a C<CheckArgs> subroutine you can access the processed parameters in the C<%_> hash.
 
-  sub rank 
+  sub rank
     :Args(:first :second :third)
     :CheckArgs(_checkargs_rank)
   { ... }
 
   # make sure names do not repeat
   sub _checkargs_rank {
-    if ( 
-      ($_{first}  eq $_{second}) or 
-      ($_{first}  eq $_{third} ) or 
-      ($_{second} eq $_{third} ) 
+    if (
+      ($_{first}  eq $_{second}) or
+      ($_{first}  eq $_{third} ) or
+      ($_{second} eq $_{third} )
     ) { die "One player can only take one place!";  }
   }
 
-If C<CheckArgs> is specified without a subroutine name, C<_checkargs_${sub_name}> will be assumed.
+If C<CheckArgs> is specified without a subroutine name, C<_checkargs_${subname}> will be assumed.
 
   sub rank :Args(...) :CheckArgs { ... }
   # is equivalent to
@@ -466,7 +431,7 @@ If C<CheckArgs> is specified without a subroutine name, C<_checkargs_${sub_name}
 
 =head1 META CLASSES
 
-C<MooseX::Params> provides method and parameter metaroles, please see their sourcecode for details (plain L<Moose>):
+C<MooseX::Params> provides method and parameter metaroles, please see their sourcecode for details:
 
 =for :list
 * L<MooseX::Params::Meta::Method>
@@ -479,6 +444,7 @@ C<MooseX::Params> provides method and parameter metaroles, please see their sour
 * subroutine traits (C<Does>)
 * better error checking and reporting
 * improved performance
+* lightweight implementation without meta and magic
 
 Whether or not these features will be implemented depends mostly on the community response to the proposed API. Currently the best way to contribute to this module would be to provide feedback and commentary - the L<Moose> mailing list will be a good place for this.
 
@@ -489,7 +455,8 @@ Plenty. Some of the known ones are:
 =for :list
 * No checking for surplus arguments
 * C<foreach my $value (@{$_{arrayref}})> attempts to modify C<$_{arrayref}> and triggers an exception
-* Incopatible with Perl6::Export::Attrs
+* May be incompatible with other modules that provide attributes, including L<Perl6::Export::Attrs>
+* C<MooseX::Params::Meta::Method> is a class, should be a role
 
 =head1 SEE ALSO
 

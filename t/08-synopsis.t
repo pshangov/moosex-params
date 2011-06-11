@@ -2,7 +2,6 @@ use strict;
 use warnings;
 
 use Test::Most;
-
 use IO::String;
 
 {
@@ -33,29 +32,29 @@ use IO::String;
     }
 
     sub sum :Args(ArrayRef *values) {
-	    my $sum = 0;
+        my $sum = 0;
 
         my @values = @{$_{values}};
-	  
+
         foreach my $value (@values)
         {
-	      $sum += $value;
-	    }
-	
+          $sum += $value;
+        }
+
         return $sum;
     }
 
     sub search :Args(text, fh, all?) {
-	    my $cnt = 0;
-	  
+        my $cnt = 0;
+
         while (my $line = $_{fh}->getline)
         {
-	        if ( index($line, $_{text}) > -1 )
+            if ( index($line, $_{text}) > -1 )
             {
                 return 1 if not $_{all};
-		        $cnt++;
-	        }
-	    } 
+                $cnt++;
+            }
+        }
 
         return $cnt;
     }
@@ -101,7 +100,7 @@ use IO::String;
     {
         return "input: $_{input}, output: $_{output}, param: $_{param}";
     }
-    
+
     sub _buildargs_process_template
     {
         if (@_ == 2) {
@@ -119,9 +118,9 @@ use IO::String;
         :CheckArgs
     { return }
 
-    sub _checkargs_process_person 
+    sub _checkargs_process_person
     {
-        if ( $_{country} eq 'USA' ) 
+        if ( $_{country} eq 'USA' )
         {
             die 'All US residents must have an SSN' unless $_{ssn};
         }
@@ -130,7 +129,7 @@ use IO::String;
 
 {
     package TestSynopsisClass;
-    
+
     use Moose;
     use MooseX::Params;
 
@@ -162,13 +161,13 @@ dies_ok { TestSynopsisModule::foo(4, 9)    } 'named arguments passed as position
 dies_ok { TestSynopsisModule::foo(2)       } 'no named argument';
 dies_ok { TestSynopsisModule::foo(2, 3, 4) } 'misnamed argument';
 
-is ( TestSynopsisModule::find_clothes, 
+is ( TestSynopsisModule::find_clothes,
     'size: medium, color: white', 'with defaults' );
-is ( TestSynopsisModule::find_clothes( size => 'large', color => 'green'), 
+is ( TestSynopsisModule::find_clothes( size => 'large', color => 'green'),
     'size: large, color: green', 'without defaults' );
-is ( TestSynopsisModule::find_some_clothes, 
+is ( TestSynopsisModule::find_some_clothes,
     'size: medium, color: white', 'with builders' );
-is ( TestSynopsisModule::find_some_clothes( size => 'large', color => 'green'), 
+is ( TestSynopsisModule::find_some_clothes( size => 'large', color => 'green'),
     'size: large, color: green', 'without builders' );
 
 is ( TestSynopsisModule::process_template('from.tmpl', 'to.html', 'test'),
@@ -176,13 +175,13 @@ is ( TestSynopsisModule::process_template('from.tmpl', 'to.html', 'test'),
 is ( TestSynopsisModule::process_template('index.tmpl', 'test'),
     'input: index.tmpl, output: index.html, param: test' , 'with buildargs');
 
-lives_ok { TestSynopsisModule::process_person( 
+lives_ok { TestSynopsisModule::process_person(
         first_name => 'Peter',
         last_name  => 'Jackson',
         country    => 'UK',
 ) } 'checkargs lives';
 
-dies_ok { TestSynopsisModule::process_person( 
+dies_ok { TestSynopsisModule::process_person(
         first_name => 'Peter',
         last_name  => 'Jackson',
         country    => 'USA',
