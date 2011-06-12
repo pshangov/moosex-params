@@ -236,7 +236,7 @@ sub CheckArgs :ATTR(CODE,RAWDATA)
 
 =head1 DESCRIPTION
 
-This modules provides an attributes-based interface for parameter processing in Perl 5. For the original rationale see L<http://mechanicalrevolution.com/blog/parameter_apocalypse.html>.
+This module provides an attributes-based interface for parameter processing in Perl 5. For the original rationale see L<http://mechanicalrevolution.com/blog/parameter_apocalypse.html>.
 
 The proposed interface is based on three cornerstone propositions:
 
@@ -381,7 +381,7 @@ Within a parameter builder, you can access all other parameters in the C<%_> has
 
 =head1 BUILDARGS AND CHECKARGS
 
-=head1 BuildArgs
+=head2 BuildArgs
 
 The C<BuildArgs> attribute allows you to specify a subroutine that will be used to preprocess your arguments before they are validated against the supplied signature. It can be used as to create poor man's multimethods by coercing different types of arguments to a single signature. It is somewhat similar to what Moose's C<BUILDARGS> does for class constructors.
 
@@ -405,7 +405,7 @@ If C<BuildArgs> is specified without a subroutine name, C<_buildargs_${subname}>
   # is equivalent to
   sub rank :Args(...) :BuildArgs(_buildargs_rank) { ... }
 
-=head1 CheckArgs
+=head2 CheckArgs
 
 The C<CheckArgs> attribute allows you to specify a subroutine that will be used to perform additional validation after the arguments are validated against the supplied signature. It can be used to perform more complex validations that cannot be expressed in a simple signature. It is somewhat similar to what Moose's C<BUILD> does for class constructors. Inside a C<CheckArgs> subroutine you can access the processed parameters in the C<%_> hash.
 
