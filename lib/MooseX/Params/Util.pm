@@ -18,8 +18,6 @@ use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
 
-use Data::Printer;
-
 # DESCRIPTION: Build a parameter from either a default value or a builder
 # USED BY:     MooseX::Params::Util::process
 sub build

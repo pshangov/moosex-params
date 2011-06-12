@@ -13,7 +13,7 @@ use Moose::Meta::Class;
 sub import
 {
     no strict 'refs';
-    push @{caller.'::ISA'}, __PACKAGE__;
+    push @{caller().'::ISA'}, __PACKAGE__;
     use strict 'refs';
 }
 
@@ -266,7 +266,7 @@ Version 0.005 removes the interface based on the C<method> keyword, and retains 
 
 =head1 SIGNATURE SYNTAX
 
-Signatures are declared with the C<:Args> attribute. All parsed parameters are made available inside your subroutine within the special C<%_> hash. All elements of C<%_> are read-only, and an attempt to modify them will throw an exception. An attempt to use a hash element which is not a valid parameter name for this subroutine will also throw an exception. C<@_> is not affected by the use of signagures, so you can still use it to manually unpack arguments if you want to.
+Signatures are declared with the C<:Args> attribute. All parsed parameters are made available inside your subroutine within the special C<%_> hash. All elements of C<%_> are read-only, and an attempt to modify them will throw an exception. An attempt to use a hash element which is not a valid parameter name for this subroutine will also throw an exception. C<@_> is not affected by the use of signatures, so you can still use it to manually unpack arguments if you want to.
 
 =head2 Parameter names
 
@@ -299,7 +299,7 @@ An ampersand before a type enables coercion for this type.
 
   sub rank :Args(&Name first, &Name second, &Name third) { ... }
 
-=head2 Positional and named parametrs
+=head2 Positional and named parameters
 
 Parameters are by default positional.
 
@@ -335,7 +335,7 @@ Positional parameters are by default required, and named parameters are by defau
 
 =head2 Slurpy parameters
 
-A parameter prefixed by an asterix (C<*>) is slurpy, i.e. it consumes the remainder of the argument list. Slurpy parameters must come last in the signature.
+A parameter prefixed by an asterisk (C<*>) is slurpy, i.e. it consumes the remainder of the argument list. Slurpy parameters must come last in the signature.
 
   sub rank :Args(ArrayRef *winners) {
     say "$_{winners}[0] is first, $_{winners}[1] is second, and $_{winners}[2] is third";
