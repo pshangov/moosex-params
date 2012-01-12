@@ -5,27 +5,29 @@ package MooseX::Params;
 use strict;
 use warnings;
 use 5.010;
-use Attribute::Handlers;
 use MooseX::Params::Util;
 use MooseX::Params::Meta::Method;
 use Moose::Meta::Class;
+use Sub::Identify qw(sub_name);
+use Sub::Mutate qw(when_sub_bodied);
 
 sub import
 {
-    no strict 'refs';
-    push @{caller().'::ISA'}, __PACKAGE__;
-    use strict 'refs';
+    require Attribute::Lexical;
+    Attribute::Lexical->import(
+        'CODE:Args'      => _prepare_handler(\&Args),
+        'CODE:BuildArgs' => _prepare_handler(\&BuildArgs),
+        'CODE:CheckArgs' => _prepare_handler(\&CheckArgs),
+    );
 }
 
-sub Args :ATTR(CODE,RAWDATA)
-{
-    my ($package, $symbol, $referent, $attr, $data) = @_;
+### ATTRIBUTES ###
 
-    my ($name)  = $$symbol =~ /.+::(\w+)$/;
-    my $coderef = \&$symbol;
+sub Args
+{
+    my ($coderef, $name, $package, $data) = @_;
 
     my $parameters = MooseX::Params::Util::inflate_parameters($package, $data);
-
     my $wrapped_coderef = MooseX::Params::Util::wrap_method($coderef, $package, $parameters);
 
     my $method = MooseX::Params::Meta::Method->wrap(
@@ -38,24 +40,40 @@ sub Args :ATTR(CODE,RAWDATA)
     Moose::Meta::Class->initialize($package)->add_method($name, $method);
 }
 
-sub BuildArgs :ATTR(CODE,RAWDATA)
+sub BuildArgs
 {
-    my ($package, $symbol, $referent, $attr, $data) = @_;
-    my ($name)  = $$symbol =~ /.+::(\w+)$/;
+    my ($coderef, $name, $package, $data) = @_;
     $data = "_buildargs_$name" unless $data;
-
-    my $method = Moose::Meta::Class->initialize($package)->get_method($name);
-    $method->buildargs($data);
+    Moose::Meta::Class->initialize($package)->get_method($name)->buildargs($data);
 }
 
-sub CheckArgs :ATTR(CODE,RAWDATA)
+sub CheckArgs
 {
-    my ($package, $symbol, $referent, $attr, $data) = @_;
-    my ($name)  = $$symbol =~ /.+::(\w+)$/;
+    my ($coderef, $name, $package, $data) = @_;
     $data = "_checkargs_$name" unless $data;
+    Moose::Meta::Class->initialize($package)->get_method($name)->checkargs($data);
+}
 
-    my $method = Moose::Meta::Class->initialize($package)->get_method($name);
-    $method->checkargs($data);
+### PRIVATE FUNCTIONS ###
+
+sub _prepare_handler
+{
+    my $handler = shift;
+
+    return sub {
+        my ($symbol, $attr, $data, $caller) = @_;
+
+        my ($package, $filename, $line, $subroutine, $hasargs, $wantarray,
+            $evaltext, $is_require, $hints, $bitmask, $hinthash) = @$caller;
+
+        when_sub_bodied ( $symbol, sub
+        {
+            my $coderef = shift;
+            my $name = sub_name($coderef);
+
+            return $handler->($coderef, $name, $package, $data);
+        });
+    };
 }
 
 1;

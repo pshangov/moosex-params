@@ -1,5 +1,9 @@
 Revision history for MooseX-Params
 
+0.006   11/01/2011
+        * Switch from Attribute::Handlers to Attribute::Lexical
+        * Set minimum Moose version requirement
+
 0.005   12/06/2011
         * Removed 'method' keyword interface
         * Updated documentation and tests

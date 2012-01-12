@@ -1,0 +1,14 @@
+* Ask how to execute after subroutine compilation
+* Switch to Attribute::Lexical
+* Test with anonymous subs
+* Syntax
+** Coercion
+** Subroutine types or string types
+* Features
+** Returns and ReturnsScalar
+** Signatures from prototypes
+** Run through NYTProf
+* Lightweight implementation
+* Use from modules
+** Export
+** Prototype
