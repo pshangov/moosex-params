@@ -1,5 +1,3 @@
-* Ask how to execute after subroutine compilation
-* Switch to Attribute::Lexical
 * Test with anonymous subs
 * Syntax
 ** Coercion
