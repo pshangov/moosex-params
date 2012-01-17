@@ -49,7 +49,12 @@ sub fetch
 
 sub store
 {
-    Carp::croak "Attempt to modify read-only parameter" if caller ne __PACKAGE__;
+    my ( $ref, $data, $key ) = @_;
+
+    if (caller ne __PACKAGE__ and caller ne 'MooseX::Params::Util')
+    {
+        Carp::carp "Attempt to modify read-only parameter '$key'";
+    }
 }
 
 1;
