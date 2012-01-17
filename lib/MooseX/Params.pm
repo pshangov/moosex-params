@@ -8,17 +8,24 @@ use 5.010;
 use MooseX::Params::Util;
 use MooseX::Params::Meta::Method;
 use Moose::Meta::Class;
+use Moose::Util::TypeConstraints qw(find_type_constraint);
 use Sub::Identify qw(sub_name);
 use Sub::Mutate qw(when_sub_bodied);
+use Carp qw(croak);
+use Data::Dumper;
 
 sub import
 {
+    my @attrs = qw(Args BuildArgs CheckArgs Returns);
+
+    my @handlers;
+    foreach my $attribute (@attrs)
+    {
+        push @handlers, "CODE:$attribute", _prepare_handler($attribute);
+    }
+
     require Attribute::Lexical;
-    Attribute::Lexical->import(
-        'CODE:Args'      => _prepare_handler(\&Args),
-        'CODE:BuildArgs' => _prepare_handler(\&BuildArgs),
-        'CODE:CheckArgs' => _prepare_handler(\&CheckArgs),
-    );
+    Attribute::Lexical->import(@handlers);
 }
 
 ### ATTRIBUTES ###
@@ -54,11 +61,36 @@ sub CheckArgs
     Moose::Meta::Class->initialize($package)->get_method($name)->checkargs($data);
 }
 
+sub Returns
+{
+    my ($coderef, $name, $package, $data) = @_;
+    croak "Empty return value constraint not allowed" unless $data;
+
+    my $metaclass = Moose::Meta::Class->initialize($package);
+    my $method = $metaclass->get_method($name);
+
+    unless ( $method->isa('MooseX::Params::Meta::Method') )
+    {
+        my $wrapped_coderef = MooseX::Params::Util::wrap_method($method->body, $package);
+        $method = MooseX::Params::Meta::Method->wrap(
+            $wrapped_coderef,
+            name         => $name,
+            package_name => $package,
+        );
+
+        $metaclass->add_method($name, $method);
+    }
+
+    $method->returns($data);
+}
+
 ### PRIVATE FUNCTIONS ###
 
 sub _prepare_handler
 {
-    my $handler = shift;
+    my $handler = Moose::Meta::Class->initialize(__PACKAGE__)
+                                    ->get_method(shift)
+                                    ->body;
 
     return sub {
         my ($symbol, $attr, $data, $caller) = @_;
@@ -70,6 +102,9 @@ sub _prepare_handler
         {
             my $coderef = shift;
             my $name = sub_name($coderef);
+
+            croak "MooseX::Params currently does not support anonymous subroutines"
+                if $name eq "__ANON__";
 
             return $handler->($coderef, $name, $package, $data);
         });

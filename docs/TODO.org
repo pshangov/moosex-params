@@ -1,4 +1,5 @@
-* Test with anonymous subs
+* Metaclass
+** 
 * Syntax
 ** Coercion
 ** Subroutine types or string types

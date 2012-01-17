@@ -17,9 +17,10 @@ use Package::Stash;
 use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
+use Data::Dumper;
 
 # DESCRIPTION: Build a parameter from either a default value or a builder
-# USED BY:     MooseX::Params::Util::process
+# USED BY:     MooseX::Params::Util::process_args
 sub build
 {
     my ($param, $stash) = @_;
@@ -64,7 +65,7 @@ sub wrap_method
 
     return sub
     {
-        local %_ = process(@_);
+        local %_ = process_args(@_);
 
         my $wizard = MooseX::Params::Magic::Wizard->new;
 
@@ -74,7 +75,8 @@ sub wrap_method
             package    => $package,
         );
 
-        return $coderef->(@_);
+        my @values = process_return_values($coderef->(@_));
+        return wantarray ? @values : $values[0];
     };
 }
 
@@ -126,7 +128,7 @@ sub wrap_checkargs
 # DESCRIPTION: Get the parameters passed to a method, pair them with parameter definitions,
 #              build, coerce, validate and return them as a hash
 # USED BY:     MooseX::Params::Util::wrap_method
-sub process
+sub process_args
 {
     my @parameters = @_;
 
@@ -175,12 +177,12 @@ sub process
 
     foreach my $param (@parameter_objects)
     {
-        # $is_set - has a value been passed for this parameter
-        # $is_required - is the parameter required
-        # $is_lazy - should we build the value now or on first use
-        # $has_default - does the parameter have a default value or a builder
+        # $is_set         - has a value been passed for this parameter
+        # $is_required    - is the parameter required
+        # $is_lazy        - should we build the value now or on first use
+        # $has_default    - does the parameter have a default value or a builder
         # $original_value - the value passed for this parameter
-        # $value - the value to be returned for this parameter, after any coercions
+        # $value          - the value to be returned for this parameter, after any coercions
 
         my ( $is_set, $original_value );
 
@@ -264,8 +266,26 @@ sub process
     return %return_values;
 }
 
+sub process_return_values
+{
+    my $frame = 1;
+    my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+
+    my $meta = Class::MOP::Class->initialize($package_name);
+    my $method = $meta->get_method($method_name);
+
+    return @_ unless $method->has_return_value_constraint;
+
+    Carp::croak "MooseX::Params cannot currently process mustiple returns values"
+        if @_ > 1;
+
+    my $constraint = find_type_constraint($method->returns);
+    $constraint->assert_valid($_[0]);
+    return $_[0];
+}
+
 # DESCRIPTION: Given a parameter specification and a value, validate and coerce the value
-# USED BY:     MooseX::Params::Util::process
+# USED BY:     MooseX::Params::Util::process_args
 sub validate
 {
     my ($param, $value) = @_;

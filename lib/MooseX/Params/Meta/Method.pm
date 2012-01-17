@@ -43,6 +43,13 @@ has 'checkargs' =>
     isa => 'Str',
 );
 
+has 'returns' =>
+(
+    is        => 'rw',
+    isa       => 'Str',
+    predicate => 'has_return_value_constraint',
+);
+
 has '_delayed' =>
 (
     is       => 'ro',

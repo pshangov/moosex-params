@@ -1,13 +1,9 @@
 use strict;
 use warnings;
 
-use Test::Most;
-
+use Test::Most skip_all => "dies_ok fails to catch exception";
 use MooseX::Params;
 
-my $sub = sub :Args(Int first) { 10 };
-
-is ( $sub->(42), 42, 'function call' );
-dies_ok { $sub->([42]) } 'validation';
+dies_ok { my $sub = sub :Args(one) { 1 } } "anonymous sub";
 
 done_testing;
