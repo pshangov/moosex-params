@@ -3,10 +3,10 @@ Revision history for MooseX-Params
 0.008   25/01/2011
         * Add return value validation
 
-0.007   17/01/2011
-        * Mitigation of incompatibility with Moose 2.0401
+0.007   17/01/2012
+        * Mitigation for incompatibility with Moose 2.0401
 
-0.006   11/01/2011
+0.006   11/01/2012
         * Switch from Attribute::Handlers to Attribute::Lexical
         * Set minimum Moose version requirement
 
