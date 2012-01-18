@@ -75,8 +75,7 @@ sub wrap_method
             package    => $package,
         );
 
-        my @values = process_return_values($coderef->(@_));
-        return wantarray ? @values : $values[0];
+        return process_return_values($coderef->(@_));
     };
 }
 
@@ -279,9 +278,27 @@ sub process_return_values
     Carp::croak "MooseX::Params cannot currently process mustiple returns values"
         if @_ > 1;
 
-    my $constraint = find_type_constraint($method->returns);
-    $constraint->assert_valid($_[0]);
-    return $_[0];
+    my $constraint = 
+        Moose::Util::TypeConstraints::find_or_parse_type_constraint(
+            $method->returns
+        );
+    
+    if ( $constraint->is_subtype_of('Array'))
+    {
+        $constraint->assert_valid(\@_);
+        return @_;
+    }
+    elsif ( $constraint->is_subtype_of('Hash') )
+    {
+        $constraint->assert_valid({@_});
+        return @_;
+    }
+    else
+    {
+        $constraint->assert_valid($_[0]);
+        return $_[0];
+    }
+
 }
 
 # DESCRIPTION: Given a parameter specification and a value, validate and coerce the value
