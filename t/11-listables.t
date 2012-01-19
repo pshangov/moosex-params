@@ -5,11 +5,6 @@ use Test::Most;
 use MooseX::Params::TypeConstraints;
 use Moose::Util::TypeConstraints;
 
-use Data::Dumper;
-
-my @c = Moose::Util::TypeConstraints::get_all_parameterizable_types;
-warn Dumper \@c;
-
 my $array = Moose::Util::TypeConstraints::find_or_parse_type_constraint('Array');
 isa_ok $array, 'MooseX::Params::Meta::TypeConstraint::Listable';
 ok $array->listable, 'array type constraint is listable';
@@ -33,7 +28,7 @@ ok !$hash->check([]), 'hash type constraint does not match arrayref';
 
 my $hash_of_str = Moose::Util::TypeConstraints::find_or_parse_type_constraint('Hash[Str]');
 isa_ok $hash_of_str, 'Moose::Meta::TypeConstraint::Parameterized';
-ok $hash_of_str->parent->listable
+ok $hash_of_str->parent->listable,
     'hash of strings type constraint is listable';
 ok $hash_of_str->check({foo => 'bar', baz => 'quz'}), 
     'hash of strings type constraint matches hashref of strings';

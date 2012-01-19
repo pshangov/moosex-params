@@ -7,12 +7,12 @@ use warnings;
 use 5.010;
 use MooseX::Params::Util;
 use MooseX::Params::Meta::Method;
+use MooseX::Params::TypeConstraints;
 use Moose::Meta::Class;
-use Moose::Util::TypeConstraints qw(find_type_constraint);
+use Moose::Util::TypeConstraints qw();
 use Sub::Identify qw(sub_name);
 use Sub::Mutate qw(when_sub_bodied);
 use Carp qw(croak);
-use Data::Dumper;
 
 sub import
 {
@@ -32,55 +32,29 @@ sub import
 
 sub Args
 {
-    my ($coderef, $name, $package, $data) = @_;
-
-    my $parameters = MooseX::Params::Util::inflate_parameters($package, $data);
-    my $wrapped_coderef = MooseX::Params::Util::wrap_method($coderef, $package, $parameters);
-
-    my $method = MooseX::Params::Meta::Method->wrap(
-        $wrapped_coderef,
-        name         => $name,
-        package_name => $package,
-        parameters   => $parameters,
-    );
-
-    Moose::Meta::Class->initialize($package)->add_method($name, $method);
+    my ($method, $data) = @_;
+    my $parameters = MooseX::Params::Util::inflate_parameters($method->package_name, $data);
+    $method->parameters($parameters);
 }
 
 sub BuildArgs
 {
-    my ($coderef, $name, $package, $data) = @_;
-    $data = "_buildargs_$name" unless $data;
-    Moose::Meta::Class->initialize($package)->get_method($name)->buildargs($data);
+    my ($method, $data) = @_;
+    $data = "_buildargs_" . $method->name unless $data;
+    $method->buildargs($data);
 }
 
 sub CheckArgs
 {
-    my ($coderef, $name, $package, $data) = @_;
-    $data = "_checkargs_$name" unless $data;
-    Moose::Meta::Class->initialize($package)->get_method($name)->checkargs($data);
+    my ($method, $data) = @_;
+    $data = "_checkargs_" . $method->name unless $data;
+    $method->checkargs($data);
 }
 
 sub Returns
 {
-    my ($coderef, $name, $package, $data) = @_;
+    my ($method, $data) = @_;
     croak "Empty return value constraint not allowed" unless $data;
-
-    my $metaclass = Moose::Meta::Class->initialize($package);
-    my $method = $metaclass->get_method($name);
-
-    unless ( $method->isa('MooseX::Params::Meta::Method') )
-    {
-        my $wrapped_coderef = MooseX::Params::Util::wrap_method($method->body, $package);
-        $method = MooseX::Params::Meta::Method->wrap(
-            $wrapped_coderef,
-            name         => $name,
-            package_name => $package,
-        );
-
-        $metaclass->add_method($name, $method);
-    }
-
     $method->returns($data);
 }
 
@@ -92,7 +66,8 @@ sub _prepare_handler
                                     ->get_method(shift)
                                     ->body;
 
-    return sub {
+    return sub 
+    {
         my ($symbol, $attr, $data, $caller) = @_;
 
         my ($package, $filename, $line, $subroutine, $hasargs, $wantarray,
@@ -106,7 +81,25 @@ sub _prepare_handler
             croak "MooseX::Params currently does not support anonymous subroutines"
                 if $name eq "__ANON__";
 
-            return $handler->($coderef, $name, $package, $data);
+            my $metaclass = Moose::Meta::Class->initialize($package);
+            my $method = $metaclass->get_method($name);
+
+            unless ( $method->isa('MooseX::Params::Meta::Method') )
+            {
+                my $wrapped_coderef = MooseX::Params::Util::wrap_method($package, $name, $coderef);
+
+                my $wrapped_method = MooseX::Params::Meta::Method->wrap(
+                    $wrapped_coderef,
+                    name         => $name,
+                    package_name => $package,
+                );
+
+                $metaclass->add_method($name, $wrapped_method);
+
+                $method = $wrapped_method;
+            }
+
+            return $handler->($method, $data);
         });
     };
 }

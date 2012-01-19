@@ -61,21 +61,36 @@ sub build
 # USED BY:     MooseX::Params::Args
 sub wrap_method
 {
-    my ($coderef, $package, $parameters) = @_;
+    my ($package_name, $method_name, $coderef) = @_;
 
     return sub
     {
-        local %_ = process_args(@_);
+        my $meta = Class::MOP::Class->initialize($package_name);
+        my $method = $meta->get_method($method_name);
 
-        my $wizard = MooseX::Params::Magic::Wizard->new;
+        local %_;
+        
+        if ( $method->has_parameters )
+        {
 
-        Variable::Magic::cast(%_, $wizard,
-            parameters => $parameters,
-            wrapper    => \&wrap_param_builder,
-            package    => $package,
-        );
+            %_ = process_args($meta, $method, @_);
+            my $wizard = MooseX::Params::Magic::Wizard->new;
 
-        return process_return_values($coderef->(@_));
+            Variable::Magic::cast(%_, $wizard,
+                parameters => $method->parameters,
+                wrapper    => \&wrap_param_builder,
+                package    => $package_name,
+            );
+        }
+        
+        if ( $method->has_return_value_constraint)
+        {
+            return process_return_values($method, $coderef->(@_));
+        }
+        else
+        {
+            return $coderef->(@_);
+        }
     };
 }
 
@@ -129,13 +144,8 @@ sub wrap_checkargs
 # USED BY:     MooseX::Params::Util::wrap_method
 sub process_args
 {
-    my @parameters = @_;
+    my ( $meta, $method, @parameters ) = @_;
 
-    # get parameter definitions from meta class
-    my $frame = 1;
-    my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
-    my $meta = Class::MOP::Class->initialize($package_name);
-    my $method = $meta->get_method($method_name);
     my @parameter_objects = $method->all_parameters if $method->has_parameters;
     return unless @parameter_objects;
 
@@ -172,7 +182,7 @@ sub process_args
     # start processing
     my %return_values;
 
-    my $stash = Package::Stash->new($package_name);
+    my $stash = Package::Stash->new($method->package_name);
 
     foreach my $param (@parameter_objects)
     {
@@ -258,7 +268,7 @@ sub process_args
     if ($method->checkargs)
     {
         my $checkargs = $meta->get_method($method->checkargs)->body;
-        my $wrapped = wrap_checkargs($checkargs, $package_name, $method->parameters);
+        my $wrapped = wrap_checkargs($checkargs, $method->package_name, $method->parameters);
         $wrapped->(%return_values);
     }
 
@@ -267,16 +277,9 @@ sub process_args
 
 sub process_return_values
 {
-    my $frame = 1;
-    my ($package_name, $method_name) = caller($frame)->subroutine  =~ /^(.+)::(\w+)$/;
+    my ( $method, @values ) = @_;
 
-    my $meta = Class::MOP::Class->initialize($package_name);
-    my $method = $meta->get_method($method_name);
-
-    return @_ unless $method->has_return_value_constraint;
-
-    Carp::croak "MooseX::Params cannot currently process mustiple returns values"
-        if @_ > 1;
+    return @values unless $method->has_return_value_constraint;
 
     my $constraint = 
         Moose::Util::TypeConstraints::find_or_parse_type_constraint(
@@ -285,18 +288,18 @@ sub process_return_values
     
     if ( $constraint->is_subtype_of('Array'))
     {
-        $constraint->assert_valid(\@_);
-        return @_;
+        $constraint->assert_valid(\@values);
+        return @values;
     }
     elsif ( $constraint->is_subtype_of('Hash') )
     {
-        $constraint->assert_valid({@_});
-        return @_;
+        $constraint->assert_valid({@values});
+        return @values;
     }
     else
     {
-        $constraint->assert_valid($_[0]);
-        return $_[0];
+        $constraint->assert_valid($values[0]);
+        return $values[0];
     }
 
 }
