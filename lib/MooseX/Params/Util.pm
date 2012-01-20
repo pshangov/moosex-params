@@ -289,12 +289,25 @@ sub process_return_values
     if ( $constraint->is_subtype_of('Array'))
     {
         $constraint->assert_valid(\@values);
-        return @values;
+
+        given ($method->returns_scalar)
+        {
+            when ('First')    { return $values[0] }
+            when ('Last')     { return $values[-1] }
+            when ('ArrayRef') { return \@values }
+            when ('Count')    { return scalar @values }
+            default           { return @values }
+        }
     }
     elsif ( $constraint->is_subtype_of('Hash') )
     {
         $constraint->assert_valid({@values});
-        return @values;
+
+        given ($method->returns_scalar)
+        {
+            when ('HashRef') { return {@values} }
+            default          { return @values }
+        }
     }
     else
     {

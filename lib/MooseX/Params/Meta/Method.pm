@@ -50,6 +50,12 @@ has 'returns' =>
     predicate => 'has_return_value_constraint',
 );
 
+has 'returns_scalar' =>
+(
+    is        => 'rw',
+    isa       => 'Str',
+);
+
 has '_delayed' =>
 (
     is       => 'ro',

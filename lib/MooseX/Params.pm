@@ -16,7 +16,7 @@ use Carp qw(croak);
 
 sub import
 {
-    my @attrs = qw(Args BuildArgs CheckArgs Returns);
+    my @attrs = qw(Args BuildArgs CheckArgs Returns ReturnsScalar);
 
     my @handlers;
     foreach my $attribute (@attrs)
@@ -57,6 +57,13 @@ sub Returns
     croak "Empty return value constraint not allowed" unless $data;
     $method->returns($data);
 }
+
+sub ReturnsScalar
+{
+    my ($method, $data) = @_;
+    $method->returns_scalar($data);
+}
+
 
 ### PRIVATE FUNCTIONS ###
 
