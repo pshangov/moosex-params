@@ -80,7 +80,9 @@ $registry->add_type_constraint(
     )
 );
 
-package Moose::Util::TypeConstraints;
+# split into two lines to prevent CPAN indexer from catching this
+package 
+    Moose::Util::TypeConstraints; 
 
 my @NEW_PARAMETERIZABLE_TYPES
     = map { $registry->get_type_constraint($_) } qw[ScalarRef Array ArrayRef Hash HashRef Maybe];

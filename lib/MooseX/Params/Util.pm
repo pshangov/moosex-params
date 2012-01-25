@@ -72,7 +72,7 @@ sub wrap_method
         my $wantarray = wantarray;
 
         local %_;
-        
+
         if ( $method->has_parameters )
         {
 
@@ -85,7 +85,7 @@ sub wrap_method
                 package    => $package_name,
             );
         }
-        
+
         if ( $method->has_return_value_constraint)
         {
             return process_return_values($method, $wantarray, $coderef->(@_));
@@ -284,7 +284,7 @@ sub process_return_values
 
     return @values unless $method->has_return_value_constraint;
 
-    my $constraint = 
+    my $constraint =
         Moose::Util::TypeConstraints::find_or_parse_type_constraint(
             $method->returns
         );
@@ -470,7 +470,7 @@ sub prepare_attribute_handler
                                     ->get_method(shift)
                                     ->body;
 
-    return sub 
+    return sub
     {
         my ($symbol, $attr, $data, $caller) = @_;
 

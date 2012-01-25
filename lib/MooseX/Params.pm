@@ -16,7 +16,7 @@ sub import
     my @handlers;
     foreach my $attribute (@attrs)
     {
-        push @handlers, "CODE:$attribute", 
+        push @handlers, "CODE:$attribute",
             MooseX::Params::Util::prepare_attribute_handler($attribute);
     }
 
@@ -450,7 +450,7 @@ If C<CheckArgs> is specified without a subroutine name, C<_checkargs_${subname}>
 
 =head2 Returns
 
-C<MooseX::Params> provids a basic mechanism for return value validation via the C<Returns> attribute. 
+C<MooseX::Params> provids a basic mechanism for return value validation via the C<Returns> attribute.
 
  sub add :Args(a, b) :Returns(Num) { return $_{a} + $_{b} }
  my $five = add(2,3);

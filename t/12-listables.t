@@ -15,9 +15,9 @@ my $array_of_str = Moose::Util::TypeConstraints::find_or_parse_type_constraint('
 isa_ok $array_of_str, 'Moose::Meta::TypeConstraint::Parameterized';
 ok $array_of_str->parent->listable,
     'array of strings parent type constraint is listable';
-ok $array_of_str->check([qw(foo bar)]), 
+ok $array_of_str->check([qw(foo bar)]),
     'array of strings type constraint matches arrayref of strings';
-ok !$array_of_str->check([[],[]]), 
+ok !$array_of_str->check([[],[]]),
     'array of strings type constraint does not match arrayref of arrayrefs';
 
 my $hash = Moose::Util::TypeConstraints::find_or_parse_type_constraint('Hash');
@@ -30,9 +30,9 @@ my $hash_of_str = Moose::Util::TypeConstraints::find_or_parse_type_constraint('H
 isa_ok $hash_of_str, 'Moose::Meta::TypeConstraint::Parameterized';
 ok $hash_of_str->parent->listable,
     'hash of strings type constraint is listable';
-ok $hash_of_str->check({foo => 'bar', baz => 'quz'}), 
+ok $hash_of_str->check({foo => 'bar', baz => 'quz'}),
     'hash of strings type constraint matches hashref of strings';
-ok !$hash_of_str->check({foo => {}, bar => {}}), 
+ok !$hash_of_str->check({foo => {}, bar => {}}),
     'hash of strings type constraint does not match hashref of hashrefs';
 
 done_testing;
