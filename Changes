@@ -1,5 +1,8 @@
 Revision history for MooseX-Params
 
+0.009   25/01/2011
+        * Prevent CPAN from indexing Moose::Util::TypeConstraints
+
 0.008   25/01/2011
         * Add return value validation
 
