@@ -31,7 +31,7 @@ is_deeply \@res_last,     $foo_bar_baz, 'last in list context';
 is_deeply \@res_arrayref, $foo_bar_baz, 'arrayref in list context';
 is_deeply \@res_count,    $foo_bar_baz, 'count in list context';
 
-is_deeply $res_default,   ['foo'],      'default in scalar context';
+is        $res_default,   3,            'default in scalar context';
 is        $res_first,     'foo',        'first in scalar context';
 is        $res_last,      'baz',        'last in scalar context';
 is_deeply $res_arrayref,  $foo_bar_baz, 'arrayref in scalar context';

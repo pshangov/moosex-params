@@ -11,13 +11,15 @@ use List::Util                   qw(max first);
 use Scalar::Util                 qw(isweak);
 use Perl6::Caller                qw(caller);
 use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
-use attributes                   qw();
+use Sub::Identify                qw(sub_name);
+use Sub::Mutate                  qw(when_sub_bodied);
+use Carp                         qw(croak);
 use Class::MOP::Class;
+use MooseX::Params::Meta::Method;
 use Package::Stash;
 use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
-use Data::Dumper;
 
 # DESCRIPTION: Build a parameter from either a default value or a builder
 # USED BY:     MooseX::Params::Util::process_args
@@ -67,6 +69,7 @@ sub wrap_method
     {
         my $meta = Class::MOP::Class->initialize($package_name);
         my $method = $meta->get_method($method_name);
+        my $wantarray = wantarray;
 
         local %_;
         
@@ -85,7 +88,7 @@ sub wrap_method
         
         if ( $method->has_return_value_constraint)
         {
-            return process_return_values($method, $coderef->(@_));
+            return process_return_values($method, $wantarray, $coderef->(@_));
         }
         else
         {
@@ -277,7 +280,7 @@ sub process_args
 
 sub process_return_values
 {
-    my ( $method, @values ) = @_;
+    my ( $method, $wantarray, @values ) = @_;
 
     return @values unless $method->has_return_value_constraint;
 
@@ -285,10 +288,11 @@ sub process_return_values
         Moose::Util::TypeConstraints::find_or_parse_type_constraint(
             $method->returns
         );
-    
-    if ( $constraint->is_subtype_of('Array'))
+
+    if ( $constraint->is_a_type_of('Array'))
     {
         $constraint->assert_valid(\@values);
+        return @values if $wantarray;
 
         given ($method->returns_scalar)
         {
@@ -299,9 +303,10 @@ sub process_return_values
             default           { return @values }
         }
     }
-    elsif ( $constraint->is_subtype_of('Hash') )
+    elsif ( $constraint->is_a_type_of('Hash') )
     {
         $constraint->assert_valid({@values});
+        return @values if $wantarray;
 
         given ($method->returns_scalar)
         {
@@ -459,4 +464,47 @@ sub inflate_parameters
     return \%inflated_parameters;
 }
 
+sub prepare_attribute_handler
+{
+    my $handler = Moose::Meta::Class->initialize('MooseX::Params')
+                                    ->get_method(shift)
+                                    ->body;
+
+    return sub 
+    {
+        my ($symbol, $attr, $data, $caller) = @_;
+
+        my ($package, $filename, $line, $subroutine, $hasargs, $wantarray,
+            $evaltext, $is_require, $hints, $bitmask, $hinthash) = @$caller;
+
+        when_sub_bodied ( $symbol, sub
+        {
+            my $coderef = shift;
+            my $name = sub_name($coderef);
+
+            croak "MooseX::Params currently does not support anonymous subroutines"
+                if $name eq "__ANON__";
+
+            my $metaclass = Moose::Meta::Class->initialize($package);
+            my $method = $metaclass->get_method($name);
+
+            unless ( $method->isa('MooseX::Params::Meta::Method') )
+            {
+                my $wrapped_coderef = MooseX::Params::Util::wrap_method($package, $name, $coderef);
+
+                my $wrapped_method = MooseX::Params::Meta::Method->wrap(
+                    $wrapped_coderef,
+                    name         => $name,
+                    package_name => $package,
+                );
+
+                $metaclass->add_method($name, $wrapped_method);
+
+                $method = $wrapped_method;
+            }
+
+            return $handler->($method, $data);
+        });
+    };
+}
 1;
