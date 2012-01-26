@@ -8,9 +8,13 @@ use 5.010;
 use MooseX::Params::Util;
 use MooseX::Params::TypeConstraints;
 use Carp qw(croak);
+use B::Hooks::EndOfScope qw(on_scope_end);
 
 sub import
 {
+    require warnings::illegalproto;
+    warnings::illegalproto->unimport;
+
     my @attrs = qw(Args BuildArgs CheckArgs Returns ReturnsScalar);
 
     my @handlers;
@@ -22,6 +26,9 @@ sub import
 
     require Attribute::Lexical;
     Attribute::Lexical->import(@handlers);
+
+    my $package = caller;
+    on_scope_end { MooseX::Params::Util::process_prototypes($package) };
 }
 
 ### ATTRIBUTES ###

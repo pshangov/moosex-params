@@ -12,7 +12,7 @@ use Scalar::Util                 qw(isweak);
 use Perl6::Caller                qw(caller);
 use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
 use Sub::Identify                qw(sub_name);
-use Sub::Mutate                  qw(when_sub_bodied);
+use Sub::Mutate                  qw(when_sub_bodied sub_prototype mutate_sub_prototype);
 use Carp                         qw(croak);
 use Class::MOP::Class;
 use MooseX::Params::Meta::Method;
@@ -75,7 +75,6 @@ sub wrap_method
 
         if ( $method->has_parameters )
         {
-
             %_ = process_args($meta, $method, @_);
             my $wizard = MooseX::Params::Magic::Wizard->new;
 
@@ -481,30 +480,80 @@ sub prepare_attribute_handler
         {
             my $coderef = shift;
             my $name = sub_name($coderef);
+            my $prototype = sub_prototype($coderef);
+            warn $prototype;
+            mutate_sub_prototype($coderef, undef);
 
             croak "MooseX::Params currently does not support anonymous subroutines"
                 if $name eq "__ANON__";
 
             my $metaclass = Moose::Meta::Class->initialize($package);
             my $method = $metaclass->get_method($name);
+            $method = ensure_method_metaclass($method);
 
-            unless ( $method->isa('MooseX::Params::Meta::Method') )
+            if ( defined $prototype )
             {
-                my $wrapped_coderef = MooseX::Params::Util::wrap_method($package, $name, $coderef);
-
-                my $wrapped_method = MooseX::Params::Meta::Method->wrap(
-                    $wrapped_coderef,
-                    name         => $name,
-                    package_name => $package,
-                );
-
-                $metaclass->add_method($name, $wrapped_method);
-
-                $method = $wrapped_method;
+                my $parameters = inflate_parameters($package, $prototype);
+                $method->parameters($parameters);
             }
 
             return $handler->($method, $data);
         });
     };
 }
+
+sub process_prototypes
+{
+    my $package = shift;
+    my $meta = Class::MOP::Class->initialize($package);
+
+    foreach my $method ($meta->get_all_methods)
+    {
+        my $name = $method->name;
+        my $body = $method->body;
+
+        # check if we have set the signature already (e.g. via :Args)
+        next if $method->can('parameters') and $method->has_parameters;
+        # check if we have a prototype
+        next unless defined ( my $signature = sub_prototype($body) );
+        # we can now delete the prototype
+        mutate_sub_prototype($body, undef);
+
+        # make sure that the metaclass is MooseX::Params::Meta::method
+        $method = ensure_method_metaclass($method);
+
+        # now set the parameter list in the meta method
+        my $parameters = inflate_parameters($package, $signature);
+        $method->parameters($parameters);
+    }
+}
+
+sub ensure_method_metaclass
+{
+    my $method = shift;
+
+    if ( $method->isa('MooseX::Params::Meta::Method') )
+    {
+        return $method;
+    }
+    else
+    {
+        my $wrapped_coderef = MooseX::Params::Util::wrap_method(
+            $method->package_name, $method->name, $method->body
+        );
+
+        my $wrapped_method = MooseX::Params::Meta::Method->wrap(
+            $wrapped_coderef,
+            name         => $method->name,
+            package_name => $method->package_name,
+        );
+
+        my $meta = Class::MOP::Class->initialize($method->package_name);
+
+        $meta->add_method($method->name, $wrapped_method);
+
+        return $wrapped_method;
+    }
+}
+
 1;
