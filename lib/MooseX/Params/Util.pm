@@ -13,6 +13,7 @@ use Perl6::Caller                qw(caller);
 use B::Hooks::EndOfScope         qw(on_scope_end); # magic fails without this, have to find out why ...
 use Sub::Identify                qw(sub_name);
 use Sub::Mutate                  qw(when_sub_bodied);
+use Scalar::Readonly             qw(readonly_on);
 use Carp                         qw(croak);
 use Class::MOP::Class;
 use MooseX::Params::Meta::Method;
@@ -77,6 +78,7 @@ sub wrap_method
         {
 
             %_ = process_args($meta, $method, @_);
+            readonly_on($_) for values %_;
             my $wizard = MooseX::Params::Magic::Wizard->new;
 
             Variable::Magic::cast(%_, $wizard,

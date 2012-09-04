@@ -1,9 +1,12 @@
 Revision history for MooseX-Params
 
-0.009   25/01/2011
+0.010   03/02/2012
+        * True read-only support for %_ values
+
+0.009   25/01/2012
         * Prevent CPAN from indexing Moose::Util::TypeConstraints
 
-0.008   25/01/2011
+0.008   25/01/2012
         * Add return value validation
 
 0.007   17/01/2012

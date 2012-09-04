@@ -37,7 +37,9 @@ sub new
         $map{$field} = $coderef if $coderef;
     }
 
-    return Variable::Magic::wizard(%map);
+    return Variable::Magic::wizard( %map,
+        op_info => Variable::Magic::VMG_OP_INFO_OBJECT
+    );
 }
 
 1;
