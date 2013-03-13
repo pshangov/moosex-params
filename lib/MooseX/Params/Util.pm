@@ -509,4 +509,22 @@ sub prepare_attribute_handler
         });
     };
 }
+
+sub parse_prototype {
+    my $prototype = shift;
+    my @names = split ',', $prototype;
+    
+    my @objects;
+
+    for ( my $i = 0; $i <= $#names; $i++ ) {
+        push @objects, {
+            name  => $names[$i],
+            type  => 'positional',
+            index => $i,
+        };
+    }
+
+    return @objects;
+}
+
 1;

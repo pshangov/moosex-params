@@ -6,9 +6,10 @@ use Test::Most;
 {
     package TestExecute;
 
+    no warnings::illegalproto;
     use Moose;
     use Moose::Util::TypeConstraints;
-    use MooseX::Params;
+    use MooseX::Params::Signatures;
 
     # test_isa
 
