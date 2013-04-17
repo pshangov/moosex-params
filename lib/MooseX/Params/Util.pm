@@ -349,6 +349,64 @@ sub validate
     return $value;
 }
 
+sub parse_function_proto
+{
+    my $string = shift;
+    my @params;
+
+    # because the singatures comes from the prototype slot, it is
+    # guaranteed not to conain any whitespace, including new lines
+    my @fields = split ',', $string;
+
+    my $format = qr/^
+        ( ?<slurpy>   \*   )? # is it slurpy
+        ( ?<named>    :    )? # is it named
+        ( ?<name>     \w+  )  # parameter name
+        ( ?<required> [!?] )? # required or optional
+    $/x;
+
+    foreach my $param (@fields)
+    {
+        if ($param =~ $format)
+        {
+            push @params, {
+                name     => $+{name},
+                required => ( defined $+{required} and $+{required} eq '?' ) ? 0 : 1,
+                type     => $+{named} ? 'named' : 'positional',
+                slurpy   => $+{slurpy} ? 1 : 0,
+            };
+        }
+        else
+        {
+            Carp::croak "Error parsing parameter specification '$param'";
+        }
+    }
+
+    return @params;
+}
+
+sub parse_method_proto
+{
+    my $string = shift;
+    my @params;
+
+    if ($string =~ s/^(\w+)://)
+    {
+        my $invocant = $1;
+
+        push @params, {
+            name     => $invocant,
+            required => 1,
+            type     => 'positional',
+            slurpy   => 0,
+        };
+    }
+
+    push @params, parse_function_proto($string);
+
+    return @params;
+}
+
 sub parse_attribute
 {
     my $string = shift;
@@ -402,7 +460,6 @@ sub parse_attribute
         )?
 
     $/x;
-
 
     foreach my $param ($csv_parser->fields)
     {
