@@ -6,7 +6,6 @@ use Test::Most;
 {
     package TestExecute;
 
-    no warnings::illegalproto;
     use Moose;
     use Moose::Util::TypeConstraints;
     use MooseX::Params::Signatures;

@@ -49,12 +49,12 @@ subtest 'function signatures' => sub {
     is_deeply(\@specs, \@expected, "parameter specifications");
 };
 
-subtions 'method signatures with implicit self' => sub {
+subtest 'method signatures with implicit self' => sub {
     my @specs = MooseX::Params::Util::parse_method_proto($signature);
     is(@specs, 6, "number of parameters");
 };
 
-subtions 'method signatures with explicit self' => sub {
+subtest 'method signatures with explicit self' => sub {
     my @specs = MooseX::Params::Util::parse_method_proto("self: " . $signature);
 
     my $invocant = {
@@ -66,4 +66,5 @@ subtions 'method signatures with explicit self' => sub {
 
     is_deeply(\@specs, [$invocant, @expected], "parameter specifications");
 };
+
 done_testing;

@@ -41,7 +41,7 @@ has 'init_arg' =>
 
 has 'default' =>
 (
-    is => 'ro',
+    is => 'rw',
 );
 
 has 'does' =>

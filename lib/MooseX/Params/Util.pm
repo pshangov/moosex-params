@@ -15,6 +15,7 @@ use Sub::Identify                qw(sub_name);
 use Sub::Mutate                  qw(when_sub_bodied);
 use Scalar::Readonly             qw(readonly_on);
 use Carp                         qw(croak);
+use Text::Trim                   qw(trim);
 use Class::MOP::Class;
 use MooseX::Params::Meta::Method;
 use Package::Stash;
@@ -27,6 +28,7 @@ use MooseX::Params::Magic::Wizard;
 sub build
 {
     my ($param, $stash) = @_;
+    use Data::Dumper; warn Dumper $param;
 
     my $value;
 
@@ -46,7 +48,7 @@ sub build
         }
         else
         {
-            my $coderef = $stash->get_symbol('&' . $param->builder);
+            $coderef = $stash->get_symbol('&' . $param->builder);
             Carp::croak("Cannot find builder " . $param->builder) unless $coderef;
         }
 
@@ -353,10 +355,10 @@ sub parse_function_proto
 {
     my $string = shift;
     my @params;
-
+    
     # because the singatures comes from the prototype slot, it is
     # guaranteed not to conain any whitespace, including new lines
-    my @fields = split ',', $string;
+    my @fields = map trim, split ',', $string;
 
     my $format = qr/^
         ( ?<slurpy>   \*   )? # is it slurpy
@@ -371,7 +373,7 @@ sub parse_function_proto
         {
             push @params, {
                 name     => $+{name},
-                required => ( defined $+{required} and $+{required} eq '?' ) ? 0 : 1,
+                required => ( $+{required} || ( $+{named} ? '?' : '!' ) ) eq '!' ? 1 : 0,
                 type     => $+{named} ? 'named' : 'positional',
                 slurpy   => $+{slurpy} ? 1 : 0,
             };
@@ -387,20 +389,15 @@ sub parse_function_proto
 
 sub parse_method_proto
 {
-    my $string = shift;
-    my @params;
+    my $string   = shift;
+    my $invocant = ( $string =~ s/^(\w+):// ) ? trim $1 : 'self';
 
-    if ($string =~ s/^(\w+)://)
-    {
-        my $invocant = $1;
-
-        push @params, {
-            name     => $invocant,
-            required => 1,
-            type     => 'positional',
-            slurpy   => 0,
-        };
-    }
+    my @params = {
+        name     => $invocant,
+        required => 1,
+        type     => 'positional',
+        slurpy   => 0,
+    };
 
     push @params, parse_function_proto($string);
 
@@ -565,23 +562,6 @@ sub prepare_attribute_handler
             return $handler->($method, $data);
         });
     };
-}
-
-sub parse_prototype {
-    my $prototype = shift;
-    my @names = split ',', $prototype;
-    
-    my @objects;
-
-    for ( my $i = 0; $i <= $#names; $i++ ) {
-        push @objects, {
-            name  => $names[$i],
-            type  => 'positional',
-            index => $i,
-        };
-    }
-
-    return @objects;
 }
 
 1;

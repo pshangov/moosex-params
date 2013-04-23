@@ -5,17 +5,13 @@ use Sub::Mutate qw(when_sub_bodied sub_prototype mutate_sub_prototype);
 use Moose::Meta::Class;
 use MooseX::Params::Util;
 
-my ( $import, $unimport, $init_meta ) = Moose::Exporter->build_import_methods(
-    with_meta => [qw(method annotate validate)],
-    install   => [qw(unimport)]
-);
-
 sub import {
     require warnings::illegalproto;
     warnings::illegalproto->unimport;
 
     no strict 'refs';
     *{ caller . "::method"}   = \&method;
+    *{ caller . "::function"} = \&function;
     *{ caller . "::annotate"} = \&annotate;
     *{ caller . "::validate"} = \&validate;
 }
@@ -25,8 +21,13 @@ sub init_meta {
     Moose->init_meta(@_);
 }
 
+sub function {
+    push @_, 1;
+    goto &method;
+}
+
 sub method {
-    my ($name, $coderef) = @_;
+    my ($name, $coderef, $is_function) = @_;
 
     my $package = caller;
     my $meta    = Moose::Meta::Class->initialize($package);
@@ -43,7 +44,10 @@ sub method {
 
     $meta->add_method($name, $method);
 
-    my @parameters = MooseX::Params::Util::parse_prototype($proto);
+    my @parameters = $is_function
+        ? MooseX::Params::Util::parse_function_proto($proto)
+        : MooseX::Params::Util::parse_method_proto($proto);
+
     my $position = 0;
     my %inflated_parameters;
 
@@ -52,6 +56,7 @@ sub method {
         my $parameter_object = MooseX::Params::Meta::Parameter->new(
             index   => $position,
             package => $package,
+            lazy    => 1, #FIXME
             %$param,
         );
 
@@ -63,15 +68,18 @@ sub method {
 }
 
 sub validate {
-    my ($meta, $name, %options) = @_;
+    my ($name, %options) = @_;
 
-    my $method = $meta->get_method($name);
+    my $package = caller;
+    my $meta    = Moose::Meta::Class->initialize($package);
+    my $method  = $meta->get_method($name);
 
     foreach my $param_name (keys %options) {
         my $parameter = $method->get_parameter($param_name);
         next unless $parameter;
         
         while (my ($key, $value) = each %{ $options{$param_name}}) {
+            $key = 'constraint' if $key eq 'isa';
             $parameter->$key($value);
         }
 
@@ -79,9 +87,11 @@ sub validate {
 }
 
 sub annotate {
-    my ($meta, $name, %options) = @_;
+    my ($name, %options) = @_;
 
-    my $method = $meta->get_method($name);
+    my $package = caller;
+    my $meta    = Moose::Meta::Class->initialize($package);
+    my $method  = $meta->get_method($name);
 
     while (my ($key, $value) = each %options) {
         $method->$key($value);
