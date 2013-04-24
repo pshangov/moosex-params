@@ -1,9 +1,11 @@
 package MooseX::Params::Signatures;
 
 use Moose::Exporter;
+use MooseX::Params::TypeConstraints;
 use Sub::Mutate qw(when_sub_bodied sub_prototype mutate_sub_prototype);
 use Moose::Meta::Class;
 use MooseX::Params::Util;
+use Carp qw(croak);
 
 sub import {
     require warnings::illegalproto;
@@ -28,6 +30,9 @@ sub function {
 
 sub method {
     my ($name, $coderef, $is_function) = @_;
+
+    croak "MooseX::Params currently does not support anonymous subroutines"
+        if ref $name eq 'CODE';
 
     my $package = caller;
     my $meta    = Moose::Meta::Class->initialize($package);
@@ -56,7 +61,6 @@ sub method {
         my $parameter_object = MooseX::Params::Meta::Parameter->new(
             index   => $position,
             package => $package,
-            lazy    => 1, #FIXME
             %$param,
         );
 
@@ -81,6 +85,7 @@ sub validate {
         while (my ($key, $value) = each %{ $options{$param_name}}) {
             $key = 'constraint' if $key eq 'isa';
             $parameter->$key($value);
+            $parameter->lazy(1) if $key =~ /^(builder)$/, # FIXME
         }
 
     }

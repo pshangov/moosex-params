@@ -28,7 +28,6 @@ use MooseX::Params::Magic::Wizard;
 sub build
 {
     my ($param, $stash) = @_;
-    use Data::Dumper; warn Dumper $param;
 
     my $value;
 
@@ -354,6 +353,9 @@ sub validate
 sub parse_function_proto
 {
     my $string = shift;
+    
+    return unless $string;
+
     my @params;
     
     # because the singatures comes from the prototype slot, it is
