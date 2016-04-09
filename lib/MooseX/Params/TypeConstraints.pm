@@ -5,6 +5,7 @@ use warnings;
 
 use Moose::Util::TypeConstraints;
 use MooseX::Params::Meta::TypeConstraint::Listable;
+use List::Util 1.33 ();
 
 my $registry = Moose::Util::TypeConstraints::get_type_constraint_registry;
 
@@ -35,7 +36,7 @@ $registry->add_type_constraint(
             'do {'
                 . 'my $check = ' . $val . ';'
                 . 'ref($check) eq "ARRAY" '
-                    . '&& &List::MoreUtils::all('
+                    . '&& &List::Util::all('
                         . 'sub { ' . $type_parameter->_inline_check('$_') . ' }, '
                         . '@{$check}'
                     . ')'
@@ -71,7 +72,7 @@ $registry->add_type_constraint(
             'do {'
                 . 'my $check = ' . $val . ';'
                 . 'ref($check) eq "HASH" '
-                    . '&& &List::MoreUtils::all('
+                    . '&& &List::Util::all('
                         . 'sub { ' . $type_parameter->_inline_check('$_') . ' }, '
                         . 'values %{$check}'
                     . ')'
