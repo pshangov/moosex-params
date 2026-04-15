@@ -80,7 +80,8 @@ $registry->add_type_constraint(
     )
 );
 
-package Moose::Util::TypeConstraints;
+package # hide from Dist::Zilla::Plugin::PkgVersion
+    Moose::Util::TypeConstraints;
 
 my @NEW_PARAMETERIZABLE_TYPES
     = map { $registry->get_type_constraint($_) } qw[ScalarRef Array ArrayRef Hash HashRef Maybe];
