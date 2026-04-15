@@ -11,6 +11,9 @@ use MooseX::Params::Util;
 use MooseX::Params::Magic::Data;
 use parent 'MooseX::Params::Magic::Base';
 
+no warnings 'experimental::smartmatch';
+no warnings 'deprecated';
+
 sub data
 {
     my ($ref, %data) = @_;

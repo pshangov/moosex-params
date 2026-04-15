@@ -22,6 +22,9 @@ use Text::CSV_XS;
 use MooseX::Params::Meta::Parameter;
 use MooseX::Params::Magic::Wizard;
 
+no warnings 'experimental::smartmatch';
+no warnings 'deprecated';
+
 # DESCRIPTION: Build a parameter from either a default value or a builder
 # USED BY:     MooseX::Params::Util::process_args
 sub build
