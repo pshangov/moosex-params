@@ -1,1 +1,5 @@
 *.swp
+/.build/
+!/.gitignore
+/MooseX-Params-*/
+/MooseX-Params-*.tar.gz
